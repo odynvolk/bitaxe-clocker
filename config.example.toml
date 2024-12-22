@@ -1,0 +1,12 @@
+price_limit = 0.2 # Price limit for switching to slow
+
+# Multiple Bitaxes are supported
+[[bitaxes]]
+host = "192.168.8.1"
+slow = 50 # GH/s to use in slow mode
+normal = 500 # GH/s to use in normal mode
+
+[[bitaxes]]
+host = "192.168.8.2"
+slow = 50
+normal = 550
