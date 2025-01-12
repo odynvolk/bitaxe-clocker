@@ -126,9 +126,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     println!("Something went wrong when updating {}", bitaxe.host);
                 }
-
-                is_running_normal = if is_running_normal { false } else { true };
             }
+
+            is_running_normal = if is_running_normal { false } else { true };
         }
 
         println!("Sleeping for 1 hour");
