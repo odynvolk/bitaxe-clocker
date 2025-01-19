@@ -1,4 +1,4 @@
-use chrono::DateTime;
+use chrono::{DateTime, Local};
 use lazy_static::lazy_static;
 use reqwest::{self, Client};
 use serde::Deserialize;
@@ -38,7 +38,7 @@ fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     file.read_to_string(&mut contents)?;
 
     let config: Config = toml::from_str(&contents)?;
-    println!("Config: {:?}", config);
+    log(format!("Config: {:?}", config));
 
     Ok(config)
 }
@@ -50,7 +50,7 @@ async fn get_current_price(client: &Client) -> Result<f64, Box<dyn std::error::E
         "https://www.elprisetjustnu.se/api/v1/prices/{}_SE3.json",
         now.format("%Y/%m-%d")
     );
-    println!("URL {}", url);
+    log(format!("Getting electricity price from URL {}", url));
 
     let response = client.get(url).send().await?;
     let json: Value = response.json().await?;
@@ -66,51 +66,73 @@ async fn get_current_price(client: &Client) -> Result<f64, Box<dyn std::error::E
         }
     }
 
-    println!("Current price {}", current_price);
+    log(format!("Current electricity price {}", current_price));
+
     Ok(current_price)
 }
 
-async fn should_switch_frequency(
+async fn should_switch_frequency_to(
     client: &Client,
-    is_running_normal: bool,
+    bitaxe: &Bitaxe,
+    current_price: f64,
+) -> Result<i32, Box<dyn std::error::Error>> {
+    let is_running_normal: bool = is_running_normal(&client, &bitaxe).await?;
+
+    let switch_frequency_to: i32 = if current_price > CONFIG.price_limit && is_running_normal {
+        bitaxe.slow
+    } else if current_price < CONFIG.price_limit && !is_running_normal {
+        bitaxe.normal
+    } else {
+        -1
+    };
+
+    Ok(switch_frequency_to)
+}
+
+async fn is_running_normal(
+    client: &Client,
+    bitaxe: &Bitaxe,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    let current_price: f64 = get_current_price(&client).await?;
-    let switch_frequency: bool = if current_price > CONFIG.price_limit && is_running_normal {
+    let url = format!("http://{}/api/system/info", bitaxe.host);
+    log(format!("Getting Bitaxe info from URL {}", url));
+
+    let response = client.get(url).send().await?;
+    let json: Value = response.json().await?;
+
+    let running_normal: bool = if json["frequency"] == bitaxe.normal {
+        println!("Bitaxe is running at {} which is normal", json["frequency"]);
         true
     } else {
+        println!("Bitaxe is running at {} which is slow", json["frequency"]);
         false
     };
 
-    Ok(switch_frequency)
+    Ok(running_normal)
+}
+
+fn log(message: String) {
+  let current_local: DateTime<Local> = Local::now();
+  let custom_format = current_local.format("%Y-%m-%d %H:%M:%S");
+  println!("{} - {}", custom_format, message);
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let hour_in_milliseconds = 1000 * 60 * 60;
+    log(format!("Bitaxe Clocker Config {:?}", &CONFIG.bitaxes));
 
-    let mut is_running_normal: bool = true;
+    let hour_in_milliseconds = 1000 * 60 * 60;
     let client = Client::new();
 
     loop {
-        println!("CONFIG {:?}", &CONFIG.bitaxes);
-        println!("Bitaxes running normal {}", is_running_normal);
-
-        let switch_frequency: bool = should_switch_frequency(&client, is_running_normal).await?;
-
-        if switch_frequency {
-            for bitaxe in &CONFIG.bitaxes {
-                println!("Uppdating {}", bitaxe.host);
-                let frequency_to_use = if is_running_normal {
-                    println!("Switching frequency to slow");
-                    bitaxe.slow
-                } else {
-                    println!("Switching frequency to fast");
-                    bitaxe.normal
-                };
-
+        let current_price: f64 = get_current_price(&client).await?;
+        for bitaxe in &CONFIG.bitaxes {
+            log(format!("Checking {}", bitaxe.host));
+            let switch_frequency_to: i32 =
+                should_switch_frequency_to(&client, bitaxe, current_price).await?;
+            if switch_frequency_to != -1 {
+                log(format!("Switching frequency to {}", switch_frequency_to));
                 let mut body = HashMap::new();
-                body.insert("frequency", frequency_to_use);
-
+                body.insert("frequency", switch_frequency_to);
                 let response = client
                     .patch(format!("http://{}/api/system", bitaxe.host))
                     .json(&body)
@@ -118,20 +140,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await?;
 
                 if response.status() == 200 {
-                    println!("Restarting");
+                    log("Restarting!".to_owned());
                     client
                         .post(format!("http://{}/api/system/restart", bitaxe.host))
                         .send()
                         .await?;
                 } else {
-                    println!("Something went wrong when updating {}", bitaxe.host);
+                    log(format!("Something went wrong when updating {}", bitaxe.host));
                 }
             }
-
-            is_running_normal = if is_running_normal { false } else { true };
         }
 
-        println!("Sleeping for 1 hour");
+        log("Sleeping for 1 hour".to_owned());
         let ten_millis = time::Duration::from_millis(hour_in_milliseconds);
         thread::sleep(ten_millis);
     }
