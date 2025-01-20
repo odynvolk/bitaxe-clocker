@@ -1,3 +1,5 @@
+check_interval = 60 # How often price should be check and frequency updated, in minutes
+
 price_limit = 0.2 # Price limit for switching to slow
 
 # Multiple Bitaxes are supported
