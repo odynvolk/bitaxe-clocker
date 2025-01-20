@@ -13,6 +13,8 @@ use std::{thread, time};
 #[derive(Debug, Deserialize)]
 struct Config {
     #[allow(dead_code)]
+    check_interval: i32,
+    #[allow(dead_code)]
     price_limit: f64,
     #[allow(dead_code)]
     bitaxes: Vec<Bitaxe>,
@@ -120,7 +122,7 @@ fn log(message: String) {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log(format!("Bitaxe Clocker Config {:?}", &CONFIG.bitaxes));
 
-    let hour_in_milliseconds = 1000 * 60 * 60;
+    let check_interval = 1000 * 60 * &CONFIG.check_interval;
     let client = Client::new();
 
     loop {
@@ -151,8 +153,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        log("Sleeping for 1 hour".to_owned());
-        let ten_millis = time::Duration::from_millis(hour_in_milliseconds);
+        log(format!("Sleeping for {} minutes", &CONFIG.check_interval).to_owned());
+        let ten_millis = time::Duration::from_millis(check_interval.try_into().unwrap());
         thread::sleep(ten_millis);
     }
 }
