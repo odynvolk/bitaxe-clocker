@@ -3,12 +3,14 @@ use lazy_static::lazy_static;
 use reqwest::{self, Client};
 use serde::Deserialize;
 use serde_json::Value;
+use spin_sleep;
 use toml;
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::{thread, time};
+// use std::{thread, time};
+use std::{time};
 
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -122,7 +124,7 @@ fn log(message: String) {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log(format!("Bitaxe Clocker Config {:?}", &CONFIG.bitaxes));
 
-    let check_interval = 1000 * 60 * &CONFIG.check_interval;
+    let check_interval:u64 = (1000 * 60 * &CONFIG.check_interval).try_into().unwrap();
     let client = Client::new();
 
     loop {
@@ -154,7 +156,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         log(format!("Sleeping for {} minutes", &CONFIG.check_interval).to_owned());
-        let ten_millis = time::Duration::from_millis(check_interval.try_into().unwrap());
-        thread::sleep(ten_millis);
+        // thread::sleep(time::Duration::from_millis(check_interval));
+        spin_sleep::sleep(time::Duration::from_millis(check_interval));
     }
 }
