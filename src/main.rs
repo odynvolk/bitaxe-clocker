@@ -113,9 +113,43 @@ async fn is_running_normal(
 }
 
 fn log(message: String) {
-  let current_local: DateTime<Local> = Local::now();
-  let custom_format = current_local.format("%Y-%m-%d %H:%M:%S");
-  println!("{} - {}", custom_format, message);
+    let current_local: DateTime<Local> = Local::now();
+    let custom_format = current_local.format("%Y-%m-%d %H:%M:%S");
+    println!("{} - {}", custom_format, message);
+}
+
+async fn run(client: &Client) -> Result<bool, Box<dyn std::error::Error>> {
+    let current_price: f64 = get_current_price(&client).await?;
+    for bitaxe in &CONFIG.bitaxes {
+        log(format!("Checking {}", bitaxe.host));
+        let switch_frequency_to: i32 =
+            should_switch_frequency_to(&client, bitaxe, current_price).await?;
+        if switch_frequency_to != -1 {
+            log(format!("Switching frequency to {}", switch_frequency_to));
+            let mut body = HashMap::new();
+            body.insert("frequency", switch_frequency_to);
+            let response = client
+                .patch(format!("http://{}/api/system", bitaxe.host))
+                .json(&body)
+                .send()
+                .await?;
+
+            if response.status() == 200 {
+                log("Restarting!".to_owned());
+                client
+                    .post(format!("http://{}/api/system/restart", bitaxe.host))
+                    .send()
+                    .await?;
+            } else {
+                log(format!(
+                    "Something went wrong when updating {}",
+                    bitaxe.host
+                ));
+            }
+        }
+    }
+
+    Ok(true)
 }
 
 #[tokio::main]
@@ -123,33 +157,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log(format!("Bitaxe Clocker Config {:?}", &CONFIG.bitaxes));
 
     let check_interval = 1000 * 60 * &CONFIG.check_interval;
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(time::Duration::from_secs(10))
+        .build()?;
 
     loop {
-        let current_price: f64 = get_current_price(&client).await?;
-        for bitaxe in &CONFIG.bitaxes {
-            log(format!("Checking {}", bitaxe.host));
-            let switch_frequency_to: i32 =
-                should_switch_frequency_to(&client, bitaxe, current_price).await?;
-            if switch_frequency_to != -1 {
-                log(format!("Switching frequency to {}", switch_frequency_to));
-                let mut body = HashMap::new();
-                body.insert("frequency", switch_frequency_to);
-                let response = client
-                    .patch(format!("http://{}/api/system", bitaxe.host))
-                    .json(&body)
-                    .send()
-                    .await?;
-
-                if response.status() == 200 {
-                    log("Restarting!".to_owned());
-                    client
-                        .post(format!("http://{}/api/system/restart", bitaxe.host))
-                        .send()
-                        .await?;
-                } else {
-                    log(format!("Something went wrong when updating {}", bitaxe.host));
-                }
+        match run(&client).await {
+            Ok(_) => {}
+            Err(e) => {
+                log(format!("Error: {:?}", e));
             }
         }
 
