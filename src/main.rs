@@ -15,7 +15,9 @@ struct Config {
     #[allow(dead_code)]
     check_interval: i32,
     #[allow(dead_code)]
-    price_limit: f64,
+    prices: Prices,
+    #[allow(dead_code)]
+    elpriset_just_nu: ElPrisetJustNu,
     #[allow(dead_code)]
     bitaxes: Vec<Bitaxe>,
 }
@@ -28,6 +30,22 @@ struct Bitaxe {
     slow: i32,
     #[allow(dead_code)]
     normal: i32,
+    #[allow(dead_code)]
+    turbo: i32,
+}
+
+#[derive(Debug, Deserialize)]
+struct ElPrisetJustNu {
+    #[allow(dead_code)]
+    price_zone: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Prices {
+    #[allow(dead_code)]
+    cheap: f64,
+    #[allow(dead_code)]
+    expensive: f64,
 }
 
 lazy_static! {
@@ -49,8 +67,9 @@ async fn get_current_price(client: &Client) -> Result<f64, Box<dyn std::error::E
     let mut current_price: f64 = 0.0;
     let now = chrono::Local::now();
     let url = format!(
-        "https://www.elprisetjustnu.se/api/v1/prices/{}_SE3.json",
-        now.format("%Y/%m-%d")
+        "https://www.elprisetjustnu.se/api/v1/prices/{}_{}.json",
+        now.format("%Y/%m-%d"),
+        CONFIG.elpriset_just_nu.price_zone
     );
     log(format!("Getting electricity price from URL {}", url));
 
@@ -78,12 +97,20 @@ async fn should_switch_frequency_to(
     bitaxe: &Bitaxe,
     current_price: f64,
 ) -> Result<i32, Box<dyn std::error::Error>> {
-    let is_running_normal: bool = is_running_normal(&client, &bitaxe).await?;
+    let running_mode: i32 = get_running_mode(&client, &bitaxe).await?;
 
-    let switch_frequency_to: i32 = if current_price > CONFIG.price_limit && is_running_normal {
-        bitaxe.slow
-    } else if current_price < CONFIG.price_limit && !is_running_normal {
+    let switch_to_mode: i32 = if current_price < CONFIG.prices.cheap {
+        bitaxe.turbo
+    } else if current_price < CONFIG.prices.expensive {
         bitaxe.normal
+    } else if current_price > CONFIG.prices.expensive {
+        bitaxe.slow
+    } else {
+      bitaxe.normal
+    };
+
+    let switch_frequency_to: i32 = if running_mode != switch_to_mode {
+        switch_to_mode
     } else {
         -1
     };
@@ -91,31 +118,26 @@ async fn should_switch_frequency_to(
     Ok(switch_frequency_to)
 }
 
-async fn is_running_normal(
+async fn get_running_mode(
     client: &Client,
     bitaxe: &Bitaxe,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<i32, Box<dyn std::error::Error>> {
     let url = format!("http://{}/api/system/info", bitaxe.host);
     log(format!("Getting Bitaxe info from URL {}", url));
 
     let response = client.get(url).send().await?;
     let json: Value = response.json().await?;
 
-    let running_normal: bool = if json["frequency"] == bitaxe.normal {
-        println!("Bitaxe is running at {} which is normal", json["frequency"]);
-        true
-    } else {
-        println!("Bitaxe is running at {} which is slow", json["frequency"]);
-        false
-    };
+    let running_mode: i32 = json["frequency"].as_f64().unwrap() as i32;
+    log(format!("Running mode {}", running_mode));
 
-    Ok(running_normal)
+    Ok(running_mode)
 }
 
 fn log(message: String) {
-  let current_local: DateTime<Local> = Local::now();
-  let custom_format = current_local.format("%Y-%m-%d %H:%M:%S");
-  println!("{} - {}", custom_format, message);
+    let current_local: DateTime<Local> = Local::now();
+    let custom_format = current_local.format("%Y-%m-%d %H:%M:%S");
+    println!("{} - {}", custom_format, message);
 }
 
 #[tokio::main]
@@ -148,12 +170,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .send()
                         .await?;
                 } else {
-                    log(format!("Something went wrong when updating {}", bitaxe.host));
+                    log(format!(
+                        "Something went wrong when updating {}",
+                        bitaxe.host
+                    ));
                 }
             }
         }
 
-        log(format!("Sleeping for {} minutes", &CONFIG.check_interval).to_owned());
         let ten_millis = time::Duration::from_millis(check_interval.try_into().unwrap());
         thread::sleep(ten_millis);
     }
