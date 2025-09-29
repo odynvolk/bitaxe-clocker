@@ -145,7 +145,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log(format!("Bitaxe Clocker Config {:?}", &CONFIG.bitaxes));
 
     let check_interval = 1000 * 60 * &CONFIG.check_interval;
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(time::Duration::from_secs(10))
+        .build()?;
 
     loop {
         let current_price: f64 = get_current_price(&client).await?;
