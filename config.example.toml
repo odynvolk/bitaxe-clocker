@@ -1,12 +1,20 @@
 check_interval = 60 # How often price should be check and frequency updated, in minutes
 
-price_limit = 0.2 # Price limit for switching to slow
+# What prices are considered cheap and expensive
+[prices]
+cheap = 0.1
+expensive = 0.8
+default = 0.5 # default price if current prices can't be fetched
+
+[elpriset_just_nu]
+price_zone = "SE3"
 
 # Multiple Bitaxes are supported
 [[bitaxes]]
 host = "192.168.8.1"
 slow = 50 # GH/s to use in slow mode
 normal = 500 # GH/s to use in normal mode
+turbo = 520 # GH/s to use in turbo mode
 
 [[bitaxes]]
 host = "192.168.8.2"
