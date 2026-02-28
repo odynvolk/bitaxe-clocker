@@ -46,6 +46,8 @@ struct Prices {
     cheap: f64,
     #[allow(dead_code)]
     expensive: f64,
+    #[allow(dead_code)]
+    default: f64,
 }
 
 lazy_static! {
@@ -74,20 +76,29 @@ async fn get_current_price(client: &Client) -> Result<f64, Box<dyn std::error::E
     log(format!("Getting electricity price from URL {}", url));
 
     let response = client.get(url).send().await?;
-    let json: Value = response.json().await?;
+    if response.status() == reqwest::StatusCode::OK {
+        let json: Value = response.json().await?;
 
-    for item in json.as_array().unwrap() {
-        let time_start =
-            DateTime::parse_from_rfc3339(item["time_start"].as_str().unwrap()).unwrap();
-        let time_end = DateTime::parse_from_rfc3339(item["time_end"].as_str().unwrap()).unwrap();
+        for item in json.as_array().unwrap() {
+            let time_start =
+                DateTime::parse_from_rfc3339(item["time_start"].as_str().unwrap()).unwrap();
+            let time_end =
+                DateTime::parse_from_rfc3339(item["time_end"].as_str().unwrap()).unwrap();
 
-        if (time_start < now) && (time_end > now) {
-            current_price = item["SEK_per_kWh"].as_f64().unwrap();
-            break;
+            if (time_start < now) && (time_end > now) {
+                current_price = item["SEK_per_kWh"].as_f64().unwrap();
+                break;
+            }
         }
-    }
 
-    log(format!("Current electricity price {}", current_price));
+        log(format!("Current electricity price {:?}", current_price));
+    } else {
+        current_price = CONFIG.prices.default;
+        log(format!(
+            "Error getting price using default {:?}",
+            current_price
+        ));
+    }
 
     Ok(current_price)
 }
@@ -180,6 +191,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        log(format!("Sleeping for {:?} minutes", &CONFIG.check_interval).to_owned());
         let ten_millis = time::Duration::from_millis(check_interval.try_into().unwrap());
         thread::sleep(ten_millis);
     }
