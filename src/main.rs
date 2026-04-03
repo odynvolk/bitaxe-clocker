@@ -80,10 +80,8 @@ async fn get_current_price(client: &Client) -> Result<f64, Box<dyn std::error::E
         let json: Value = response.json().await?;
 
         for item in json.as_array().unwrap() {
-            let time_start =
-                DateTime::parse_from_rfc3339(item["time_start"].as_str().unwrap()).unwrap();
-            let time_end =
-                DateTime::parse_from_rfc3339(item["time_end"].as_str().unwrap()).unwrap();
+            let time_start = DateTime::parse_from_rfc3339(item["time_start"].as_str().unwrap()).unwrap();
+            let time_end = DateTime::parse_from_rfc3339(item["time_end"].as_str().unwrap()).unwrap();
 
             if (time_start < now) && (time_end > now) {
                 current_price = item["SEK_per_kWh"].as_f64().unwrap();
@@ -94,10 +92,7 @@ async fn get_current_price(client: &Client) -> Result<f64, Box<dyn std::error::E
         log(format!("Current electricity price {:?}", current_price));
     } else {
         current_price = CONFIG.prices.default;
-        log(format!(
-            "Error getting price using default {:?}",
-            current_price
-        ));
+        log(format!("Error getting price using default {:?}", current_price));
     }
 
     Ok(current_price)
@@ -117,7 +112,7 @@ async fn should_switch_frequency_to(
     } else if current_price > CONFIG.prices.expensive {
         bitaxe.slow
     } else {
-      bitaxe.normal
+        bitaxe.normal
     };
 
     let switch_frequency_to: i32 = if running_mode != switch_to_mode {
@@ -129,10 +124,7 @@ async fn should_switch_frequency_to(
     Ok(switch_frequency_to)
 }
 
-async fn get_running_mode(
-    client: &Client,
-    bitaxe: &Bitaxe,
-) -> Result<i32, Box<dyn std::error::Error>> {
+async fn get_running_mode(client: &Client, bitaxe: &Bitaxe) -> Result<i32, Box<dyn std::error::Error>> {
     let url = format!("http://{}/api/system/info", bitaxe.host);
     log(format!("Getting Bitaxe info from URL {}", url));
 
@@ -156,16 +148,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log(format!("Bitaxe Clocker Config {:?}", &CONFIG.bitaxes));
 
     let check_interval = 1000 * 60 * &CONFIG.check_interval;
-    let client = Client::builder()
-        .timeout(time::Duration::from_secs(10))
-        .build()?;
+    let client = Client::builder().timeout(time::Duration::from_secs(10)).build()?;
 
     loop {
         let current_price: f64 = get_current_price(&client).await?;
         for bitaxe in &CONFIG.bitaxes {
             log(format!("Checking {}", bitaxe.host));
-            let switch_frequency_to: i32 =
-                should_switch_frequency_to(&client, bitaxe, current_price).await?;
+            let switch_frequency_to: i32 = should_switch_frequency_to(&client, bitaxe, current_price).await?;
             if switch_frequency_to != -1 {
                 log(format!("Switching frequency to {}", switch_frequency_to));
                 let mut body = HashMap::new();
@@ -183,10 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .send()
                         .await?;
                 } else {
-                    log(format!(
-                        "Something went wrong when updating {}",
-                        bitaxe.host
-                    ));
+                    log(format!("Something went wrong when updating {}", bitaxe.host));
                 }
             }
         }
