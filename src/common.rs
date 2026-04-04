@@ -6,41 +6,29 @@ use std::io::Read;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    #[allow(dead_code)]
     pub check_interval: i32,
-    #[allow(dead_code)]
     pub prices: Prices,
-    #[allow(dead_code)]
     pub elpriset_just_nu: ElPrisetJustNu,
-    #[allow(dead_code)]
     pub bitaxes: Vec<Bitaxe>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Bitaxe {
-    #[allow(dead_code)]
     pub host: String,
-    #[allow(dead_code)]
     pub slow: i32,
-    #[allow(dead_code)]
     pub normal: i32,
-    #[allow(dead_code)]
     pub turbo: i32,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ElPrisetJustNu {
-    #[allow(dead_code)]
     pub price_zone: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Prices {
-    #[allow(dead_code)]
     pub cheap: f64,
-    #[allow(dead_code)]
     pub expensive: f64,
-    #[allow(dead_code)]
     pub default: f64,
 }
 

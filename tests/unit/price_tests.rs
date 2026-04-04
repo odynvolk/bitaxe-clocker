@@ -1,49 +1,151 @@
-use mockito::Server;
-use reqwest::Client;
+use chrono::DateTime;
+use serde_json::json;
+use serde_json::Value;
 
-#[tokio::test]
-async fn test_get_current_price_success() {
-    // Read the fixture file
-    let fixture = std::fs::read_to_string("tests/fixtures/price.json").unwrap();
+use bitaxe_clocker::price::{parse_price_data, PriceError};
 
-    // Create a mock server
-    let mut server = Server::new_async().await;
-    let _mock = server
-        .mock("GET", "/api/v1/prices/*")
-        .with_status(200)
-        .with_header("content-type", "application/json")
-        .with_body(fixture)
-        .create();
-
-    let client = Client::builder().build().unwrap();
-
-    let price = bitaxe_clocker::price::get_current_price(&client).await.unwrap();
-
-    // Verify the price was parsed correctly - it should be positive and reasonable
-    assert!(price > 0.0, "Expected a positive price, got {}", price);
-    assert!(price < 10.0, "Expected price to be reasonable, got {}", price);
+fn fixture_price_data() -> Value {
+    serde_json::from_str(include_str!("../fixtures/price.json")).unwrap()
 }
 
-#[tokio::test]
-async fn test_get_current_price_default_on_failure() {
-    // Create a mock that returns non-200 status
-    let mut server = Server::new_async().await;
-    let _mock = server
-        .mock("GET", "/api/v1/prices/*")
-        .with_status(500)
-        .with_header("content-type", "application/json")
-        .with_body("Internal Server Error")
-        .create();
+#[test]
+fn test_parse_price_data_success() {
+    let json = fixture_price_data();
+    // Time within the first interval: 2026-04-03T00:00:00+02:00 to 2026-04-03T00:15:00+02:00
+    let now: DateTime<chrono::Local> = "2026-04-03T00:07:00+02:00".parse().unwrap();
 
-    let client = Client::builder().build().unwrap();
+    let result = parse_price_data(&json, now);
 
-    let price = bitaxe_clocker::price::get_current_price(&client).await.unwrap();
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 0.5929);
+}
 
-    // When the API fails, should return the default price from CONFIG
-    // The default should be a reasonable value
-    assert!(
-        price >= bitaxe_clocker::common::CONFIG.prices.default,
-        "Expected default price to be non-negative, got {}",
-        price
-    );
+#[test]
+fn test_parse_price_data_second_interval() {
+    let json = fixture_price_data();
+    // Time within the second interval: 2026-04-03T00:15:00+02:00 to 2026-04-03T00:30:00+02:00
+    let now: DateTime<chrono::Local> = "2026-04-03T00:22:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 0.59859);
+}
+
+#[test]
+fn test_parse_price_data_before_range() {
+    let json = fixture_price_data();
+    // Time before the first interval
+    let now: DateTime<chrono::Local> = "2026-04-02T23:00:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+}
+
+#[test]
+fn test_parse_price_data_after_range() {
+    let json = fixture_price_data();
+    // Time after the last interval
+    let now: DateTime<chrono::Local> = "2026-04-03T01:00:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+}
+
+#[test]
+fn test_parse_price_data_empty_array() {
+    let json = json!([]);
+    let now: DateTime<chrono::Local> = "2026-04-03T00:07:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+}
+
+#[test]
+fn test_parse_price_data_not_array() {
+    let json = json!({"invalid": "structure"});
+    let now: DateTime<chrono::Local> = "2026-04-03T00:07:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+}
+
+#[test]
+fn test_parse_price_data_missing_time_start() {
+    let json = json!([{
+        "SEK_per_kWh": 0.5929,
+        "time_end": "2026-04-03T00:15:00+02:00"
+    }]);
+    let now: DateTime<chrono::Local> = "2026-04-03T00:07:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), PriceError::ParseError);
+}
+
+#[test]
+fn test_parse_price_data_missing_time_end() {
+    let json = json!([{
+        "SEK_per_kWh": 0.5929,
+        "time_start": "2026-04-03T00:00:00+02:00"
+    }]);
+    let now: DateTime<chrono::Local> = "2026-04-03T00:07:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), PriceError::ParseError);
+}
+
+#[test]
+fn test_parse_price_data_invalid_datetime_format() {
+    let json = json!([{
+        "SEK_per_kWh": 0.5929,
+        "time_start": "invalid-date",
+        "time_end": "2026-04-03T00:15:00+02:00"
+    }]);
+    let now: DateTime<chrono::Local> = "2026-04-03T00:07:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), PriceError::DateTimeParseError(_)));
+}
+
+#[test]
+fn test_parse_price_data_missing_price_value() {
+    let json = json!([{
+        "time_start": "2026-04-03T00:00:00+02:00",
+        "time_end": "2026-04-03T00:15:00+02:00"
+    }]);
+    let now: DateTime<chrono::Local> = "2026-04-03T00:07:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+}
+
+#[test]
+fn test_parse_price_data_price_not_number() {
+    let json = json!([{
+        "SEK_per_kWh": "not_a_number",
+        "time_start": "2026-04-03T00:00:00+02:00",
+        "time_end": "2026-04-03T00:15:00+02:00"
+    }]);
+    let now: DateTime<chrono::Local> = "2026-04-03T00:07:00+02:00".parse().unwrap();
+
+    let result = parse_price_data(&json, now);
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
 }

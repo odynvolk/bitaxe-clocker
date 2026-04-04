@@ -139,5 +139,129 @@ async fn test_switch_frequency_failure() {
     };
 
     let result = bitaxe_clocker::bitaxe::switch_frequency(&client, &bitaxe, 590).await;
-    assert!(result.is_ok()); // Should still return Ok(()) even on failure
+    // With proper error handling, should now return an error on failure
+    assert!(result.is_err());
+    match result {
+        Err(bitaxe_clocker::bitaxe::BitaxeError::NetworkMessage(msg)) => {
+            assert_eq!(msg, "Failed to update Bitaxe");
+        }
+        _ => panic!("Expected NetworkError variant"),
+    }
+}
+
+#[cfg(test)]
+mod parse_running_mode_tests {
+    use serde_json::json;
+
+    #[test]
+    fn test_parse_running_mode_success() {
+        let json = json!({
+            "frequency": 500,
+            "hashrate": 125.5,
+            "temperature": 45.2
+        });
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 500);
+    }
+
+    #[test]
+    fn test_parse_running_mode_with_fixture() {
+        let fixture_content = include_str!("../../tests/fixtures/bitaxe_info.json");
+        let json: serde_json::Value = serde_json::from_str(fixture_content).unwrap();
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 500);
+    }
+
+    #[test]
+    fn test_parse_running_mode_missing_frequency() {
+        let json = json!({
+            "hashrate": 125.5,
+            "temperature": 45.2
+        });
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            bitaxe_clocker::bitaxe::BitaxeError::InvalidFrequency
+        );
+    }
+
+    #[test]
+    fn test_parse_running_mode_invalid_frequency_type() {
+        let json = json!({
+            "frequency": "not_a_number"
+        });
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            bitaxe_clocker::bitaxe::BitaxeError::InvalidFrequency
+        );
+    }
+
+    #[test]
+    fn test_parse_running_mode_zero_frequency() {
+        let json = json!({
+            "frequency": 0
+        });
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_parse_running_mode_large_frequency() {
+        let json = json!({
+            "frequency": 999999
+        });
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 999999);
+    }
+
+    #[test]
+    fn test_parse_running_mode_float_frequency() {
+        let json = json!({
+            "frequency": 550.7
+        });
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 550);
+    }
+
+    #[test]
+    fn test_parse_running_mode_empty_object() {
+        let json = json!({});
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            bitaxe_clocker::bitaxe::BitaxeError::InvalidFrequency
+        );
+    }
+
+    #[test]
+    fn test_parse_running_mode_null_frequency() {
+        let json = json!({
+            "frequency": null
+        });
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            bitaxe_clocker::bitaxe::BitaxeError::InvalidFrequency
+        );
+    }
+
+    #[test]
+    fn test_parse_running_mode_negative_frequency() {
+        let json = json!({
+            "frequency": -100
+        });
+        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), -100);
+    }
 }
