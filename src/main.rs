@@ -3,16 +3,40 @@ mod common;
 mod price;
 use common::{log, CONFIG};
 use reqwest::Client;
-use std::{thread, time};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    sync::Arc,
+    thread, time,
+};
+use tokio::signal;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     common::log(format!("Bitaxe Clocker Config {:?}", &common::CONFIG.bitaxes));
 
+    // Atomic flag to track shutdown request, wrapped in Arc for sharing
+    let shutdown_requested = Arc::new(AtomicBool::new(false));
+
+    // Set up Ctrl-C signal handler
+    let shutdown_clone = Arc::clone(&shutdown_requested);
+    tokio::spawn(async move {
+        if let Err(_err) = signal::ctrl_c().await {
+            log("Failed to set up Ctrl-C handler".to_string());
+        }
+        shutdown_clone.store(true, Ordering::SeqCst);
+        log("Shutdown signal received".to_string());
+    });
+
     let check_interval = 1000 * 60 * &CONFIG.check_interval;
     let client = Client::builder().timeout(time::Duration::from_secs(10)).build()?;
 
     loop {
+        // Check if shutdown was requested
+        if shutdown_requested.load(Ordering::SeqCst) {
+            log("Shutting down...".to_string());
+            break;
+        }
+
         for bitaxe in &CONFIG.bitaxes {
             log(format!("Checking {}", bitaxe.host));
             let current_price: f64 = price::get_current_price(&client).await?;
@@ -26,4 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ten_millis = time::Duration::from_millis(check_interval.try_into().unwrap());
         thread::sleep(ten_millis);
     }
+
+    log("Goodbye!".to_string());
+    Ok(())
 }
