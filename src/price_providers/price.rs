@@ -1,9 +1,7 @@
-use chrono::DateTime;
 use reqwest::Client;
-use serde_json::Value;
 use std::fmt;
-
-use crate::common;
+use std::future::Future;
+use std::pin::Pin;
 
 #[derive(Debug)]
 pub enum PriceError {
@@ -60,12 +58,25 @@ impl From<chrono::ParseError> for PriceError {
     }
 }
 
-pub fn parse_price_data(json: &Value, now: DateTime<chrono::Local>) -> Result<f64, PriceError> {
+/// Trait that all price providers must implement.
+/// This allows plugging in new providers without changing the core logic.
+pub trait PriceProvider: Send + Sync {
+    /// Fetch the current electricity price.
+    /// Returns the price in SEK/kWh or an error.
+    fn get_current_price<'a>(
+        &'a self,
+        client: &'a Client,
+    ) -> Pin<Box<dyn Future<Output = Result<f64, PriceError>> + Send + 'a>>;
+}
+
+/// Parse price data from JSON response.
+pub fn parse_price_data(json: &serde_json::Value, now: chrono::DateTime<chrono::Local>) -> Result<f64, PriceError> {
     let items = json.as_array().ok_or(PriceError::InvalidPrice)?;
 
     for item in items {
-        let time_start = DateTime::parse_from_rfc3339(item["time_start"].as_str().ok_or(PriceError::ParseError)?)?;
-        let time_end = DateTime::parse_from_rfc3339(item["time_end"].as_str().ok_or(PriceError::ParseError)?)?;
+        let time_start =
+            chrono::DateTime::parse_from_rfc3339(item["time_start"].as_str().ok_or(PriceError::ParseError)?)?;
+        let time_end = chrono::DateTime::parse_from_rfc3339(item["time_end"].as_str().ok_or(PriceError::ParseError)?)?;
 
         if (time_start < now) && (time_end > now) {
             let price = item["SEK_per_kWh"].as_f64().ok_or(PriceError::InvalidPrice)?;
@@ -74,26 +85,4 @@ pub fn parse_price_data(json: &Value, now: DateTime<chrono::Local>) -> Result<f6
     }
 
     Err(PriceError::InvalidPrice)
-}
-
-pub async fn get_current_price(client: &Client) -> Result<f64, PriceError> {
-    let now = chrono::Local::now();
-    let url = format!(
-        "https://www.elprisetjustnu.se/api/v1/prices/{}_{}.json",
-        now.format("%Y/%m-%d"),
-        common::CONFIG.elpriset_just_nu.price_zone
-    );
-    common::log(format!("Getting electricity price from URL {}", url));
-
-    let response = client.get(url).send().await?;
-    let current_price = if response.status() == reqwest::StatusCode::OK {
-        let json: Value = response.json().await?;
-        parse_price_data(&json, now)?
-    } else {
-        common::log(format!("Error getting price using default"));
-        common::CONFIG.prices.default
-    };
-
-    common::log(format!("Current electricity price {:?}", current_price));
-    Ok(current_price)
 }

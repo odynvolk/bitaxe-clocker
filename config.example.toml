@@ -6,7 +6,10 @@ cheap = 0.1
 expensive = 0.8
 default = 0.5 # default price if current prices can't be fetched
 
-[elpriset_just_nu]
+[price_provider]
+provider_type = "elpriset_just_nu"
+
+[price_provider.elpriset_just_nu]
 price_zone = "SE3"
 
 # Multiple Bitaxes are supported

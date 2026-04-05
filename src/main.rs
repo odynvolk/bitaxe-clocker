@@ -1,7 +1,8 @@
 mod bitaxe;
 mod common;
-mod price;
+mod price_providers;
 use common::{log, CONFIG};
+use price_providers::PriceProviderFactory;
 use reqwest::Client;
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -30,6 +31,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let check_interval = 1000 * 60 * &CONFIG.check_interval;
     let client = Client::builder().timeout(time::Duration::from_secs(10)).build()?;
 
+    // Create the price provider based on configuration
+    let price_provider =
+        PriceProviderFactory::create_provider(&CONFIG.price_provider.provider_type, &CONFIG.price_provider);
+
     loop {
         // Check if shutdown was requested
         if shutdown_requested.load(Ordering::SeqCst) {
@@ -39,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         for bitaxe in &CONFIG.bitaxes {
             log(format!("Checking {}", bitaxe.host));
-            let current_price: f64 = price::get_current_price(&client).await?;
+            let current_price: f64 = price_provider.get_current_price(&client).await?;
             let switch_frequency_to: i32 = bitaxe::should_switch_frequency_to(&client, bitaxe, current_price).await?;
             if switch_frequency_to != -1 {
                 bitaxe::switch_frequency(&client, bitaxe, switch_frequency_to).await?;

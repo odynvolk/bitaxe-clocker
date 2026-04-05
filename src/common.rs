@@ -8,8 +8,15 @@ use std::io::Read;
 pub struct Config {
     pub check_interval: i32,
     pub prices: Prices,
-    pub elpriset_just_nu: ElPrisetJustNu,
+    pub price_provider: PriceProviderConfig,
     pub bitaxes: Vec<Bitaxe>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PriceProviderConfig {
+    pub provider_type: String,
+    #[serde(default)]
+    pub elpriset_just_nu: Option<crate::price_providers::ElPrisetJustNuConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -21,6 +28,7 @@ pub struct Bitaxe {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ElPrisetJustNu {
     pub price_zone: String,
 }
