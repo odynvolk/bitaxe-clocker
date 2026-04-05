@@ -2,10 +2,10 @@ use chrono::DateTime;
 use serde_json::json;
 use serde_json::Value;
 
-use bitaxe_clocker::price::{parse_price_data, PriceError};
+use bitaxe_clocker::price_providers::{parse_price_data, PriceError};
 
 fn fixture_price_data() -> Value {
-    serde_json::from_str(include_str!("../fixtures/price.json")).unwrap()
+    serde_json::from_str(include_str!("../../fixtures/price.json")).unwrap()
 }
 
 #[test]
