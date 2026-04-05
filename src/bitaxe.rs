@@ -82,8 +82,8 @@ pub async fn should_switch_frequency_to(
     let switch_to_mode: i32 = determine_target_mode(
         current_price,
         bitaxe,
-        common::CONFIG.prices.cheap,
-        common::CONFIG.prices.expensive,
+        common::CONFIG.get().unwrap().prices.cheap,
+        common::CONFIG.get().unwrap().prices.expensive,
     );
     let switch_frequency_to: i32 = if running_mode != switch_to_mode {
         switch_to_mode

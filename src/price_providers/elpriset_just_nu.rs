@@ -6,7 +6,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 /// Configuration for the ElPrisetJustNu provider.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct ElPrisetJustNuConfig {
     pub price_zone: String,
 }
@@ -42,7 +42,7 @@ impl PriceProvider for ElPrisetJustNuProvider {
                 parse_price_data(&json, now)?
             } else {
                 common::log(format!("Error getting price using default"));
-                common::CONFIG.prices.default
+                common::CONFIG.get().ok_or(PriceError::InvalidPrice)?.prices.default
             };
 
             common::log(format!("Current electricity price {:?}", current_price));

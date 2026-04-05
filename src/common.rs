@@ -1,10 +1,10 @@
 use chrono::{DateTime, Local};
-use lazy_static::lazy_static;
+use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub check_interval: i32,
     pub prices: Prices,
@@ -12,14 +12,14 @@ pub struct Config {
     pub bitaxes: Vec<Bitaxe>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct PriceProviderConfig {
     pub provider_type: String,
     #[serde(default)]
     pub elpriset_just_nu: Option<crate::price_providers::ElPrisetJustNuConfig>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Bitaxe {
     pub host: String,
     pub slow: i32,
@@ -27,22 +27,14 @@ pub struct Bitaxe {
     pub turbo: i32,
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct ElPrisetJustNu {
-    pub price_zone: String,
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Prices {
     pub cheap: f64,
     pub expensive: f64,
     pub default: f64,
 }
 
-lazy_static! {
-    pub static ref CONFIG: Config = load_config().unwrap();
-}
+pub static CONFIG: OnceCell<Config> = OnceCell::new();
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     let mut file = File::open("config.toml")?;
@@ -52,7 +44,11 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     let config: Config = toml::from_str(&contents)?;
     log(format!("Config: {:?}", config));
 
-    Ok(config)
+    if !CONFIG.set(config).is_ok() {
+        log("Config already initialized".to_string());
+    }
+
+    Ok(CONFIG.get().ok_or_else(|| Box::<dyn std::error::Error>::from("Config not initialized"))?.clone())
 }
 
 pub fn log(message: String) {

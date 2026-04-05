@@ -63,10 +63,7 @@ impl From<chrono::ParseError> for PriceError {
 pub trait PriceProvider: Send + Sync {
     /// Fetch the current electricity price.
     /// Returns the price in SEK/kWh or an error.
-    fn get_current_price<'a>(
-        &'a self,
-        client: &'a Client,
-    ) -> Pin<Box<dyn Future<Output = Result<f64, PriceError>> + Send + 'a>>;
+    fn get_current_price<'a>(&'a self, client: &'a Client) -> Pin<Box<dyn Future<Output = Result<f64, PriceError>> + Send + 'a>>;
 }
 
 /// Parse price data from JSON response.
