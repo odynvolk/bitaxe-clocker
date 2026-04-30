@@ -48,10 +48,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         for bitaxe in &CONFIG.get().unwrap().bitaxes {
             log(format!("Checking {}", bitaxe.host));
-            let current_price: f64 = price_provider.get_current_price(&client).await?;
-            let switch_frequency_to: i32 = bitaxe::should_switch_frequency_to(&client, bitaxe, current_price).await?;
-            if switch_frequency_to != -1 {
-                bitaxe::switch_frequency(&client, bitaxe, switch_frequency_to).await?;
+            if let Err(e) = async {
+                let current_price: f64 = price_provider.get_current_price(&client).await?;
+                let switch_frequency_to: i32 = bitaxe::should_switch_frequency_to(&client, bitaxe, current_price).await?;
+                if switch_frequency_to != -1 {
+                    bitaxe::switch_frequency(&client, bitaxe, switch_frequency_to).await?;
+                }
+                Ok::<(), Box<dyn std::error::Error>>(())
+            }.await {
+                log(format!("Error processing {}: {}", bitaxe.host, e));
             }
         }
 
