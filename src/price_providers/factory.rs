@@ -1,4 +1,5 @@
 use crate::common;
+use crate::logger;
 use crate::price_providers::PriceProvider;
 
 /// Factory for creating price provider instances.
@@ -12,7 +13,7 @@ impl PriceProviderFactory {
             "elpriset_just_nu" => create_elpriset_provider(config),
             _ => {
                 // Default to elpriset_just_nu if unknown provider type
-                common::log(format!(
+                logger::info(&format!(
                     "Unknown provider type '{}', using elpriset_just_nu",
                     provider_type
                 ));
