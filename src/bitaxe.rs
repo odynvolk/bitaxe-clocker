@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::common;
+use crate::logger;
 
 #[derive(Debug)]
 pub enum BitaxeError {
@@ -101,13 +102,13 @@ pub fn parse_running_mode(json: &Value) -> Result<i32, BitaxeError> {
 
 pub async fn get_running_mode(client: &reqwest::Client, bitaxe: &common::Bitaxe) -> Result<i32, BitaxeError> {
     let url = format!("http://{}/api/system/info", bitaxe.host);
-    common::log(format!("Getting Bitaxe info from URL {}", url));
+    logger::info(&format!("Getting Bitaxe info from URL {}", url));
 
     let response = client.get(url).send().await?;
     let json: Value = response.json().await?;
 
     let running_mode = parse_running_mode(&json)?;
-    common::log(format!("Running mode {}", running_mode));
+    logger::info(&format!("Running mode {}", running_mode));
 
     Ok(running_mode)
 }
@@ -117,7 +118,7 @@ pub async fn switch_frequency(
     bitaxe: &common::Bitaxe,
     switch_frequency_to: i32,
 ) -> Result<(), BitaxeError> {
-    common::log(format!("Switching frequency to {}", switch_frequency_to));
+    logger::info(&format!("Switching frequency to {}", switch_frequency_to));
     let mut body = HashMap::new();
     body.insert("frequency", switch_frequency_to);
     let response = client
@@ -127,14 +128,14 @@ pub async fn switch_frequency(
         .await?;
 
     if response.status() == 200 {
-        common::log("Restarting!".to_owned());
+        logger::info("Restarting!");
         client
             .post(format!("http://{}/api/system/restart", bitaxe.host))
             .send()
             .await?;
         Ok(())
     } else {
-        common::log(format!("Something went wrong when updating {}", bitaxe.host));
+        logger::error(&format!("Something went wrong when updating {}", bitaxe.host));
         Err(BitaxeError::NetworkMessage("Failed to update Bitaxe".to_string()))
     }
 }

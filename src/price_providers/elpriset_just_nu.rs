@@ -1,4 +1,5 @@
 use crate::common;
+use crate::logger;
 use crate::price_providers::{parse_price_data, PriceError, PriceProvider};
 use reqwest::Client;
 use serde::Deserialize;
@@ -34,18 +35,18 @@ impl PriceProvider for ElPrisetJustNuProvider {
                 now.format("%Y/%m-%d"),
                 self.config.price_zone
             );
-            common::log(format!("Getting electricity price from URL {}", url));
+            logger::info(&format!("Getting electricity price from URL {}", url));
 
             let response = client.get(url).send().await?;
             let current_price = if response.status() == reqwest::StatusCode::OK {
                 let json: serde_json::Value = response.json().await?;
                 parse_price_data(&json, now)?
             } else {
-                common::log(format!("Error getting price using default"));
+                logger::error(&format!("Error getting price using default"));
                 common::CONFIG.get().ok_or(PriceError::InvalidPrice)?.prices.default
             };
 
-            common::log(format!("Current electricity price {:?}", current_price));
+            logger::info(&format!("Current electricity price {:?}", current_price));
             Ok(current_price)
         })
     }

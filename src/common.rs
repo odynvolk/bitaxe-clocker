@@ -1,8 +1,8 @@
-use chrono::{DateTime, Local};
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
+use crate::logger;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -42,17 +42,11 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     file.read_to_string(&mut contents)?;
 
     let config: Config = toml::from_str(&contents)?;
-    log(format!("Config: {:?}", config));
+    logger::info(&format!("Config: {:?}", config));
 
     if !CONFIG.set(config).is_ok() {
-        log("Config already initialized".to_string());
+        logger::info("Config already initialized");
     }
 
     Ok(CONFIG.get().ok_or_else(|| Box::<dyn std::error::Error>::from("Config not initialized"))?.clone())
-}
-
-pub fn log(message: String) {
-    let current_local: DateTime<Local> = Local::now();
-    let custom_format = current_local.format("%Y-%m-%d %H:%M:%S");
-    println!("{} - {}", custom_format, message);
 }
