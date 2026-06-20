@@ -13,7 +13,7 @@ Prerequisites:
 An easy way to setup Rust is to use [asdf](https://asdf-vm.com/). Then run `asdf install` to get the proper version specified in the project.
 
 ## Usage
-1) Create a `config.toml` from the `config.example.toml` and place it in the main diretory.
+1) Create a `config.toml` from the `config.example.toml` and place it in the main directory.
 
 2) Build a release.
 
@@ -25,6 +25,67 @@ cargo build -r
 
 ```bash
 ./target/release/bitaxe-clocker
+```
+
+## Configuration
+
+The application is configured via `config.toml`. Below is a reference of all available options.
+
+### Global Settings
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `check_interval` | `i32` | How often to check prices and update frequency, in minutes. |
+
+### Price Thresholds
+
+These thresholds determine when the Bitaxe switches between frequency modes. The naming matches the mode names for clarity.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `cheap` | `f64` | Price below this threshold triggers the **cheap** (turbo) frequency mode. |
+| `default` | `f64` | Fallback price used when live prices can't be fetched. |
+| `expensive` | `f64` | Price at or above this threshold triggers the **expensive** (slow) frequency mode. |
+
+### Price Provider
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `provider_type` | `String` | Name of the price provider (e.g. `elpriset_just_nu`). |
+| `elpriset_just_nu.price_zone` | `String` | Swedish price zone (e.g. `SE3`). |
+
+### Bitaxe Devices
+
+Each Bitaxe entry defines the frequency (in GH/s) for each price mode:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `host` | `String` | IP or hostname of the Bitaxe. |
+| `expensive` | `i32` | Frequency to use when electricity is expensive. |
+| `default` | `i32` | Frequency to use when electricity is at a normal price. |
+| `cheap` | `i32` | Frequency to use when electricity is cheap. |
+
+### Example
+
+```toml
+check_interval = 1
+
+[prices]
+cheap = 0.1        # Below this, run at cheap (turbo) frequency
+expensive = 0.8    # At or above this, run at expensive (slow) frequency
+default = 0.5      # Fallback price
+
+[price_provider]
+provider_type = "elpriset_just_nu"
+
+[price_provider.elpriset_just_nu]
+price_zone = "SE3"
+
+[[bitaxes]]
+host = "192.168.8.1"
+expensive = 50     # Low frequency when electricity is expensive
+default = 500      # Normal frequency for average prices
+cheap = 520        # High frequency when electricity is cheap
 ```
 
 ## Adding a Custom Price Provider

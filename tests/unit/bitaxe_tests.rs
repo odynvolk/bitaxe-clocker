@@ -1,12 +1,12 @@
 use bitaxe_clocker::common::Bitaxe;
 
 #[test]
-fn test_determine_target_mode_turbo() {
+fn test_determine_target_mode_cheap() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
-        slow: 50,
-        normal: 550,
-        turbo: 590,
+        expensive: 50,
+        default: 550,
+        cheap: 590,
     };
 
     let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.05, &bitaxe, 0.1, 0.8);
@@ -14,12 +14,12 @@ fn test_determine_target_mode_turbo() {
 }
 
 #[test]
-fn test_determine_target_mode_normal() {
+fn test_determine_target_mode_default() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
-        slow: 50,
-        normal: 550,
-        turbo: 590,
+        expensive: 50,
+        default: 550,
+        cheap: 590,
     };
 
     let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.5, &bitaxe, 0.1, 0.8);
@@ -27,12 +27,12 @@ fn test_determine_target_mode_normal() {
 }
 
 #[test]
-fn test_determine_target_mode_slow() {
+fn test_determine_target_mode_expensive() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
-        slow: 50,
-        normal: 550,
-        turbo: 590,
+        expensive: 50,
+        default: 550,
+        cheap: 590,
     };
 
     let mode = bitaxe_clocker::bitaxe::determine_target_mode(1.0, &bitaxe, 0.1, 0.8);
@@ -43,12 +43,12 @@ fn test_determine_target_mode_slow() {
 fn test_determine_target_mode_boundary_cheap() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
-        slow: 50,
-        normal: 550,
-        turbo: 590,
+        expensive: 50,
+        default: 550,
+        cheap: 590,
     };
 
-    // Price exactly at cheap threshold should be normal (not turbo)
+    // Price exactly at cheap threshold should be default (not cheap)
     let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.1, &bitaxe, 0.1, 0.8);
     assert_eq!(mode, 550);
 }
@@ -57,12 +57,12 @@ fn test_determine_target_mode_boundary_cheap() {
 fn test_determine_target_mode_boundary_expensive() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
-        slow: 50,
-        normal: 550,
-        turbo: 590,
+        expensive: 50,
+        default: 550,
+        cheap: 590,
     };
 
-    // Price exactly at expensive threshold should be slow (not normal)
+    // Price exactly at expensive threshold should be expensive (not default)
     let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.8, &bitaxe, 0.1, 0.8);
     assert_eq!(mode, 50);
 }
@@ -81,9 +81,9 @@ async fn test_get_running_mode_success() {
     let client = reqwest::Client::builder().build().unwrap();
     let bitaxe = Bitaxe {
         host: mock_server.url().replace("http://", ""),
-        slow: 50,
-        normal: 550,
-        turbo: 590,
+        expensive: 50,
+        default: 550,
+        cheap: 590,
     };
 
     let running_mode = bitaxe_clocker::bitaxe::get_running_mode(&client, &bitaxe)
@@ -110,9 +110,9 @@ async fn test_switch_frequency_success() {
     let client = reqwest::Client::builder().build().unwrap();
     let bitaxe = Bitaxe {
         host: mock_server.url().replace("http://", ""),
-        slow: 50,
-        normal: 550,
-        turbo: 590,
+        expensive: 50,
+        default: 550,
+        cheap: 590,
     };
 
     let result = bitaxe_clocker::bitaxe::switch_frequency(&client, &bitaxe, 590).await;
@@ -133,9 +133,9 @@ async fn test_switch_frequency_failure() {
     let client = reqwest::Client::builder().build().unwrap();
     let bitaxe = Bitaxe {
         host: mock_server.url().replace("http://", ""),
-        slow: 50,
-        normal: 550,
-        turbo: 590,
+        expensive: 50,
+        default: 550,
+        cheap: 590,
     };
 
     let result = bitaxe_clocker::bitaxe::switch_frequency(&client, &bitaxe, 590).await;
