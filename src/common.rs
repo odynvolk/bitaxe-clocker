@@ -1,8 +1,8 @@
+use crate::logger;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
-use crate::logger;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -22,9 +22,9 @@ pub struct PriceProviderConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Bitaxe {
     pub host: String,
-    pub slow: i32,
-    pub normal: i32,
-    pub turbo: i32,
+    pub expensive: i32,
+    pub default: i32,
+    pub cheap: i32,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -48,5 +48,8 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
         logger::info("Config already initialized");
     }
 
-    Ok(CONFIG.get().ok_or_else(|| Box::<dyn std::error::Error>::from("Config not initialized"))?.clone())
+    Ok(CONFIG
+        .get()
+        .ok_or_else(|| Box::<dyn std::error::Error>::from("Config not initialized"))?
+        .clone())
 }

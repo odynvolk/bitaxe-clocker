@@ -58,7 +58,7 @@ impl From<std::io::Error> for BitaxeError {
 }
 
 /// Determines the target frequency based on current price and thresholds.
-/// Returns: turbo if price < cheap, normal if cheap <= price < expensive, slow if price >= expensive
+/// Returns: cheap if price < cheap, default if cheap <= price < expensive, expensive if price >= expensive
 pub fn determine_target_mode(
     current_price: f64,
     bitaxe: &common::Bitaxe,
@@ -66,11 +66,11 @@ pub fn determine_target_mode(
     expensive_threshold: f64,
 ) -> i32 {
     if current_price < cheap_threshold {
-        bitaxe.turbo
+        bitaxe.cheap
     } else if current_price < expensive_threshold {
-        bitaxe.normal
+        bitaxe.default
     } else {
-        bitaxe.slow
+        bitaxe.expensive
     }
 }
 

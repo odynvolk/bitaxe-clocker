@@ -15,11 +15,11 @@ price_zone = "SE3"
 # Multiple Bitaxes are supported
 [[bitaxes]]
 host = "192.168.8.1"
-slow = 50 # GH/s to use in slow mode
-normal = 500 # GH/s to use in normal mode
-turbo = 520 # GH/s to use in turbo mode
+expensive = 50 # GH/s to use in expensive mode
+cheap = 520 # GH/s to use in cheap mode
+default = 500 # GH/s to use in default mode
 
 [[bitaxes]]
 host = "192.168.8.2"
-slow = 50
-normal = 550
+expensive = 50
+default = 550
