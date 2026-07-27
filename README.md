@@ -27,6 +27,27 @@ cargo build -r
 ./target/release/bitaxe-clocker
 ```
 
+## Docker
+
+Build and run the application using Docker Compose:
+
+```bash
+docker compose build
+docker compose up -d   # run in background
+docker compose down    # stop
+```
+
+This mounts your local `config.toml` into the container. The container will restart automatically unless you explicitly stop it.
+
+Alternatively, build and run with plain Docker:
+
+```bash
+docker build -t bitaxe-clocker .
+docker run -v $(pwd)/config.toml:/app/config.toml:ro bitaxe-clocker
+```
+
+The image ships with `config.example.toml` as the default. Mount your own `config.toml` to override it.
+
 ## Configuration
 
 The application is configured via `config.toml`. Below is a reference of all available options.
