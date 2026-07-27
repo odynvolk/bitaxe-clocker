@@ -1,0 +1,28 @@
+# Build artifacts
+target/
+**/*.pdb
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PI workflow
+.pi/
+
+# Local config (use volume mount instead)
+config.toml
+
+# Docs
+README.md
+LICENSE
