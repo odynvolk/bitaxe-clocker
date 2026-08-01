@@ -2,6 +2,8 @@ services:
   bitaxe-clocker:
     build: .
     image: bitaxe-clocker
+    environment:
+      - TZ=Europe/Berlin
     volumes:
       - ./config.toml:/app/config.toml:ro
     restart: unless-stopped

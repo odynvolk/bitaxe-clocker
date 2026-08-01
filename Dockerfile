@@ -20,6 +20,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
+RUN apt-get install tzdata
+
 WORKDIR /app
 
 # Copy the built binary
@@ -29,5 +31,7 @@ COPY config.example.toml ./config.toml
 
 # Expose no ports (application connects outbound only)
 # Mount your own config.toml: docker run -v ./config.toml:/app/config.toml bitaxe-clocker
+
+ENV TZ=Europe/Berlin
 
 CMD ["./bitaxe-clocker"]
