@@ -7,18 +7,14 @@ use crate::logger;
 
 #[derive(Debug)]
 pub enum BitaxeError {
-    NetworkError(reqwest::Error),
     NetworkMessage(String),
-    JsonError(serde_json::Error),
     InvalidFrequency,
 }
 
 impl fmt::Display for BitaxeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            BitaxeError::NetworkError(e) => write!(f, "Network error: {}", e),
-            BitaxeError::NetworkMessage(msg) => write!(f, "Network error: {}", msg),
-            BitaxeError::JsonError(e) => write!(f, "JSON parsing error: {}", e),
+            BitaxeError::NetworkMessage(msg) => write!(f, "{}", msg),
             BitaxeError::InvalidFrequency => write!(f, "Invalid frequency value"),
         }
     }
@@ -28,9 +24,7 @@ impl PartialEq for BitaxeError {
     fn eq(&self, other: &Self) -> bool {
         use BitaxeError::*;
         match (self, other) {
-            (NetworkError(_), NetworkError(_)) => true,
             (NetworkMessage(a), NetworkMessage(b)) => a == b,
-            (JsonError(_), JsonError(_)) => true,
             (InvalidFrequency, InvalidFrequency) => true,
             _ => false,
         }
@@ -41,13 +35,13 @@ impl std::error::Error for BitaxeError {}
 
 impl From<reqwest::Error> for BitaxeError {
     fn from(err: reqwest::Error) -> Self {
-        BitaxeError::NetworkError(err)
+        BitaxeError::NetworkMessage(format!("Network error: {}", err))
     }
 }
 
 impl From<serde_json::Error> for BitaxeError {
     fn from(err: serde_json::Error) -> Self {
-        BitaxeError::JsonError(err)
+        BitaxeError::NetworkMessage(format!("JSON parsing error: {}", err))
     }
 }
 

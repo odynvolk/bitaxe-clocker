@@ -5,8 +5,7 @@ use std::pin::Pin;
 
 #[derive(Debug)]
 pub enum PriceError {
-    NetworkError(reqwest::Error),
-    JsonError(serde_json::Error),
+    NetworkMessage(String),
     ParseError,
     InvalidPrice,
     DateTimeParseError(chrono::ParseError),
@@ -15,8 +14,7 @@ pub enum PriceError {
 impl fmt::Display for PriceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            PriceError::NetworkError(e) => write!(f, "Network error: {}", e),
-            PriceError::JsonError(e) => write!(f, "JSON parsing error: {}", e),
+            PriceError::NetworkMessage(msg) => write!(f, "{}", msg),
             PriceError::ParseError => write!(f, "Failed to parse datetime"),
             PriceError::InvalidPrice => write!(f, "Invalid price value"),
             PriceError::DateTimeParseError(e) => write!(f, "DateTime parse error: {}", e),
@@ -28,8 +26,7 @@ impl PartialEq for PriceError {
     fn eq(&self, other: &Self) -> bool {
         use PriceError::*;
         match (self, other) {
-            (NetworkError(_), NetworkError(_)) => true,
-            (JsonError(_), JsonError(_)) => true,
+            (NetworkMessage(a), NetworkMessage(b)) => a == b,
             (ParseError, ParseError) => true,
             (InvalidPrice, InvalidPrice) => true,
             (DateTimeParseError(_), DateTimeParseError(_)) => true,
@@ -42,13 +39,13 @@ impl std::error::Error for PriceError {}
 
 impl From<reqwest::Error> for PriceError {
     fn from(err: reqwest::Error) -> Self {
-        PriceError::NetworkError(err)
+        PriceError::NetworkMessage(format!("Network error: {}", err))
     }
 }
 
 impl From<serde_json::Error> for PriceError {
     fn from(err: serde_json::Error) -> Self {
-        PriceError::JsonError(err)
+        PriceError::NetworkMessage(format!("JSON parsing error: {}", err))
     }
 }
 

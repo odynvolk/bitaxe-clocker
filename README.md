@@ -58,14 +58,14 @@ The application is configured via `config.toml`. Below is a reference of all ava
 |-----|------|-------------|
 | `check_interval` | `i32` | How often to check prices and update frequency, in minutes. |
 
-### Price Thresholds
+### Prices (under `[prices]`)
 
-These thresholds determine when the Bitaxe switches between frequency modes. The naming matches the mode names for clarity.
+These options control the electricity-price thresholds that decide when the Bitaxe switches between frequency modes. Only `cheap` and `expensive` are actual mode triggers; `default` is a fallback price.
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `cheap` | `f64` | Price below this threshold triggers the **cheap** (turbo) frequency mode. |
-| `default` | `f64` | Fallback price used when live prices can't be fetched. |
+| `default` | `f64` | Fallback price used when live prices can't be fetched (not a mode trigger). |
 | `expensive` | `f64` | Price at or above this threshold triggers the **expensive** (slow) frequency mode. |
 
 ### Price Provider
@@ -187,7 +187,19 @@ mod nordpool;  // Add this line
 mod price;
 ```
 
-3. **Add the provider to the factory** in `src/price_providers/factory.rs`:
+3. **Add a `nordpool` field to the price-provider config struct** in `src/common.rs`:
+
+```rust
+pub struct PriceProviderConfig {
+    pub provider_type: String,
+    #[serde(default)]
+    pub elpriset_just_nu: Option<crate::price_providers::ElPrisetJustNuConfig>,
+    #[serde(default)]
+    pub nordpool: Option<crate::price_providers::NordpoolConfig>,
+}
+```
+
+4. **Add the provider to the factory** in `src/price_providers/factory.rs`:
 
 ```rust
 impl PriceProviderFactory {
@@ -211,7 +223,7 @@ impl PriceProviderFactory {
 }
 ```
 
-4. **Update the configuration** in `config.toml`:
+5. **Update the configuration** in `config.toml`:
 
 ```toml
 [price_provider]
