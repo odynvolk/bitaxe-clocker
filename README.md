@@ -48,6 +48,11 @@ docker run -v $(pwd)/config.toml:/app/config.toml:ro bitaxe-clocker
 
 The image ships with `config.example.toml` as the default. Mount your own `config.toml` to override it.
 
+The image includes a Docker `HEALTHCHECK` (every 30s, 3 retries). Because the application only
+makes outbound connections and exposes no inbound port, the healthcheck verifies process liveness
+by signalling PID 1 (`kill -0 1`), the `bitaxe-clocker` process itself. The container reports
+`unhealthy` if that process no longer responds.
+
 ## Configuration
 
 The application is configured via `config.toml`. Below is a reference of all available options.

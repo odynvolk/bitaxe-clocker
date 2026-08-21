@@ -34,4 +34,10 @@ COPY config.example.toml ./config.toml
 
 ENV TZ=Europe/Berlin
 
+# The application exposes no inbound ports (it connects outbound only), so the
+# healthcheck probes process liveness: PID 1 is the bitaxe-clocker binary, and
+# kill -0 (signal 0) verifies it is alive without sending a real signal.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD kill -0 1 || exit 1
+
 CMD ["./bitaxe-clocker"]
