@@ -316,6 +316,49 @@ relocation, and 40 passing tests before and after is the whole contract.
 **Dependencies:** U5 and U6 — sequenced last so the move is pure cut-paste, with no signature
 or log-call churn left to absorb.
 
+## Review record
+
+**Round 1** — isolated 04-review, 5 reviewer personas. 1 High, 2 Moderate, 8 Low.
+
+The High was a regression introduced by U7 and confirmed by reproduction: rewriting
+`Dockerfile` wholesale dropped `COPY . .`, so the builder ran `cargo build` in an empty
+`/app` (`error: could not find Cargo.toml`). It survived because the only gate that would
+catch it — `docker build` — was the one that could not be run. Restoring that `COPY` then
+pulled U1's `rust-toolchain.toml` into the build context, where `channel = "stable"` would
+have made rustup try to download a toolchain mid-build; excluded via `.dockerignore`.
+
+Round 1 also overturned one of this plan's own claims. U1 had asserted that
+`single_line_if_else_max_width`, `struct_lit_width` and `struct_variant_width` were
+nightly-only and inert. The command used to establish that, `rustfmt --config help`, is not
+supported by this rustfmt and emitted a single usage line — an empty comparison, not a
+result. Two re-tests were inconclusive (wrong file) and confounded (`max_width` alone
+already prevented the wrap being tested). The claim was therefore **removed rather than
+corrected**: whether those keys act on stable is not established either way.
+
+**Round 2** — incremental, capped. 0 High, 1 Moderate, 5 Low. All verified green:
+`cargo test --lib` 41/41, `clippy -D warnings` 0, `cargo fmt --check` 0, and bare
+`rustfmt --check src/bitaxe.rs` 0 (the round-1 Moderate is gone).
+
+## Outstanding — before merge
+
+**Run `docker build -t bitaxe-clocker .`.** This is the one gate this branch could not
+satisfy: the docker daemon is unavailable in this environment, so U7 shipped only its
+low-risk subset (`--locked`, merged apt layer, non-root `USER`) and the F1 fix above is
+correct by inspection but **unverified by execution**. A second `docker compose build`
+after `touch src/main.rs` would additionally show whether dependency layers are reused —
+not attempted, since layer caching was deliberately left out of U7's scope.
+
+Deliberately deferred, by user decision, not by oversight:
+
+| Item | Why deferred |
+|---|---|
+| Frequency-comparison risk (`parse_running_frequency` truncates `as_f64()` to `i32`, compared against integer config) | Owner elected to verify against hardware rather than have it changed blind. A trial run showed 192.168.8.226 switching 520→530 while .227 matched exactly — consistent with either a legitimate one-time correction or a per-cycle restart loop. Needs one device watched for two cycles. |
+| Dockerfile dependency-layer caching | Needs a runnable `docker build` to prove the `CACHED` layer, which was the whole point of the change. |
+| Base-image / `rust-toolchain.toml` pairing | Same reason. Currently handled by keeping the toolchain file out of the build context. |
+| `check_interval` sleep drift | Changes runtime timing behaviour; this pass promised none. Only the *typing* was fixed. |
+| Renaming the `cheap`/`default`/`expensive` modes | Public config keys — renaming breaks existing `config.toml` files. |
+| 10 duplicated `Bitaxe { … }` literals across the relocated tests | Noted by review as a P2 follow-up; would have inflated this branch's largest diff for no behavioural gain. |
+
 ## Verification strategy
 
 No CI, so these run by hand at each unit boundary, in this order.
