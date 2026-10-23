@@ -293,6 +293,29 @@ Two implementation decisions resolved during review, so they are not rediscovere
 - **U1 commit hygiene:** committing the never-tracked `Cargo.lock` is its own commit, so it does
   not inflate U1's reviewable diff.
 
+### U8 — Relocate unit tests into `#[cfg(test)]` modules
+
+**Goal:** `rust/testing.md` says unit tests belong in `#[cfg(test)]` modules beside the
+code; this repo put them under `tests/unit/`, driven by a two-line `tests/tests.rs` shim.
+Concrete cost of the current layout: `cargo test --lib` reports **0 tests**, because there
+are none in the library.
+
+**Files:** append `#[cfg(test)] mod tests` to `src/bitaxe.rs`, `src/common.rs`,
+`src/price_providers/price.rs`, `src/price_providers/factory.rs`; delete `tests/tests.rs`,
+`tests/unit/` and its two `mod.rs` files. `tests/fixtures/` stays put — cargo discovers
+targets from top-level `tests/*.rs` only, so a fixtures directory alone defines none.
+
+**Patterns to follow:** `rust/testing.md` unit-test pattern (`mod tests { use super::*; ... }`).
+
+**Test scenarios:** none new. **This unit adds zero tests and must not** — it is a pure
+relocation, and 40 passing tests before and after is the whole contract.
+
+**Verification:** `cargo test --lib` reports 40 passing (was 0); `cargo test` still 40 total;
+`cargo clippy --all-targets -- -D warnings` and `cargo fmt -- --check` clean.
+
+**Dependencies:** U5 and U6 — sequenced last so the move is pure cut-paste, with no signature
+or log-call churn left to absorb.
+
 ## Verification strategy
 
 No CI, so these run by hand at each unit boundary, in this order.
