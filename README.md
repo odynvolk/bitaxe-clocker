@@ -58,6 +58,9 @@ docker compose down    # stop
 
 This mounts your local `config.toml` into the container. The container will restart automatically unless you explicitly stop it.
 
+The container runs as a non-root user (uid 10001), so a mounted `config.toml` must be
+world-readable — the usual `644` is fine, `600` is not.
+
 Alternatively, build and run with plain Docker:
 
 ```bash
