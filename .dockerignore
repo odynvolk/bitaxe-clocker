@@ -20,6 +20,11 @@ Thumbs.db
 # PI workflow
 .pi/
 
+# Toolchain override for local development. Excluded so the image's own toolchain
+# stays authoritative: if copied in, rustup would try to download the channel it
+# names at build time, making the build network-dependent.
+rust-toolchain.toml
+
 # Local config (use volume mount instead)
 config.toml
 

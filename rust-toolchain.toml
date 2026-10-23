@@ -1,5 +1,10 @@
 [toolchain]
-# Single source of truth for the Rust toolchain, enforced automatically by rustup.
-# Replaces `.tool-versions`, which named a version asdf had no plugin to install.
-# The Docker base image is kept in sync with this channel (see Dockerfile).
+# Single source of truth for the toolchain used in local development, selected
+# automatically by rustup. Replaces `.tool-versions`, which named a rust version
+# that asdf had no plugin to install.
+#
+# Not `channel = "1.95.0"`, deliberately: naming an exact version forces every
+# machine to download that specific toolchain, and stable is what is actually
+# installed here. It also does not apply to the Docker build - the image pins
+# `rust:1.85-slim` and .dockerignore keeps this file out of the build context.
 channel = "stable"

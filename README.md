@@ -21,8 +21,8 @@ There is no CI in this repository, so these checks are run by hand before commit
 ```bash
 cargo fmt -- --check                        # formatting
 cargo clippy --all-targets -- -D warnings   # lints, warnings are errors
-NODE_ENV=test cargo test                    # test suite
-cargo build --release                       # release build
+cargo test                                  # test suite
+cargo build --release --locked              # release build
 ```
 
 Both config files in this repo are worth knowing about before you touch them: a key name that
@@ -30,6 +30,25 @@ clippy or rustfmt does not recognise does **not** produce a warning. Clippy abor
 build with an `unknown field` error, and stable rustfmt silently ignores the key and carries on.
 Re-run the two commands above after any edit to `rust-toolchain.toml` or `.rustfmt.toml` to
 confirm the change is actually in effect.
+
+## Upgrading
+
+Three changes to what the application accepts and does at startup, none of which change how
+it behaves once running:
+
+- **An unrecognised `provider_type` now stops startup.** It used to log
+  `Unknown provider type '<x>', using elpriset_just_nu` and carry on, so a daemon configured
+  for one market would silently price itself against another. A missing
+  `[price_provider.<name>]` section likewise used to panic via `.expect()`; it is now a
+  reported configuration error.
+- **`check_interval` must be a non-negative integer**, enforced while parsing. It used to
+  accept a negative value, then panic on the way to building a `Duration` from inside the
+  loop. An absurdly large value is now reported rather than silently wrapping.
+- **The Docker container runs as uid 10001** rather than root, so a mounted `config.toml`
+  must be world-readable.
+
+Log output also changed shape, from `INFO msg: Checking 192.168.8.1` to structured fields:
+`INFO Checking device host=192.168.8.1`. Anything grepping the old format needs updating.
 
 ## Usage
 1) Create a `config.toml` from the `config.example.toml` and place it in the main directory.

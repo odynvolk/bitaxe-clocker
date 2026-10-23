@@ -11,7 +11,7 @@ pub enum ConfigError {
     #[error("invalid config.toml: {0}")]
     Parse(#[from] toml::de::Error),
 
-    #[error("unknown price provider '{0}'; expected one of: elpriset_just_nu")]
+    #[error("unknown price provider: {0}")]
     UnknownProvider(String),
 
     #[error("price provider '{0}' requires a [price_provider.{0}] section")]

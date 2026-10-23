@@ -432,6 +432,11 @@ mod tests {
                 "frequency": 550.7
             });
             let result = crate::bitaxe::parse_running_frequency(&json);
+            // Asserts current behaviour, not endorsed behaviour: truncation here is what
+            // makes a fractional reported frequency never equal the integer target, so
+            // the device would be asked to switch - and restart - on every cycle.
+            // Left as-is deliberately; see the deferred-risk note in
+            // docs/plans/2026-10-23-code-quality-refactor-plan.md.
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), 550);
         }
@@ -466,6 +471,9 @@ mod tests {
                 "frequency": -100
             });
             let result = crate::bitaxe::parse_running_frequency(&json);
+            // Accepted rather than validated, as before. A negative reported frequency is
+            // physically impossible, so this is a device being wrong and us agreeing with
+            // it; the effect is the same as above - a permanent mismatch against target.
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), -100);
         }

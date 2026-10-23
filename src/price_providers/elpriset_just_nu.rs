@@ -14,8 +14,10 @@ pub struct ElPrisetJustNuConfig {
 /// Price provider implementation for elpriset-just-nu.se.
 pub struct ElPrisetJustNuProvider {
     config: ElPrisetJustNuConfig,
-    /// Used when the price API is unreachable, so a pricing outage degrades to a
-    /// configured frequency instead of stalling the loop.
+    /// Returned when the price API answers with a non-OK status, so a pricing outage
+    /// degrades to a configured frequency instead of stalling the loop. A host that is
+    /// genuinely unreachable does *not* use this - that fails at request time and
+    /// propagates `PriceError::Network`.
     fallback_price: f64,
 }
 
@@ -39,12 +41,19 @@ impl PriceProvider for ElPrisetJustNuProvider {
             );
             tracing::info!(url = %url, "Getting electricity price");
 
-            let response = client.get(url).send().await?;
+            // `url.as_str()` rather than `url`, so the request below does not consume
+            // the value this block's error line still wants to report.
+            let response = client.get(url.as_str()).send().await?;
             let current_price = if response.status() == StatusCode::OK {
                 let json: serde_json::Value = response.json().await?;
                 parse_price_data(&json, now)?
             } else {
-                tracing::error!("Error getting price using default");
+                tracing::error!(
+                    url = %url,
+                    status = %response.status(),
+                    fallback_price = self.fallback_price,
+                    "Price request failed, using configured default"
+                );
                 self.fallback_price
             };
 

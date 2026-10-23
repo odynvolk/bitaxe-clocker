@@ -5,6 +5,11 @@ use crate::price_providers::{ElPrisetJustNuProvider, PriceProvider};
 /// Centralized location for provider instantiation logic.
 pub struct PriceProviderFactory;
 
+/// Providers `create_provider` can build. Single definition so the list shown in an
+/// error cannot drift from what the message claims; `listed_provider_is_actually_buildable`
+/// fails if an entry is added here without a matching arm below.
+const SUPPORTED_PROVIDERS: &[&str] = &["elpriset_just_nu"];
+
 impl PriceProviderFactory {
     /// Builds the provider named by `config.provider_type`.
     ///
@@ -28,7 +33,10 @@ impl PriceProviderFactory {
                     fallback_price,
                 )))
             }
-            other => Err(common::ConfigError::UnknownProvider(other.to_string())),
+            other => Err(common::ConfigError::UnknownProvider(format!(
+                "'{other}'; supported providers: {}",
+                SUPPORTED_PROVIDERS.join(", ")
+            ))),
         }
     }
 }
@@ -36,6 +44,7 @@ impl PriceProviderFactory {
 #[cfg(test)]
 mod tests {
     use super::PriceProviderFactory;
+    use super::SUPPORTED_PROVIDERS;
     use crate::common::PriceProviderConfig;
     use crate::price_providers::ElPrisetJustNuConfig;
 
@@ -52,6 +61,16 @@ mod tests {
     fn known_provider_with_its_subconfig_is_created() {
         let provider = PriceProviderFactory::create_provider(&config("elpriset_just_nu", Some("SE3")), 0.5);
         assert!(provider.is_ok());
+    }
+
+    /// Guards the error text: an entry added to `SUPPORTED_PROVIDERS` without a matching
+    /// match arm would otherwise be advertised to users as available while being rejected.
+    #[test]
+    fn listed_provider_is_actually_buildable() {
+        for name in SUPPORTED_PROVIDERS {
+            let provider = PriceProviderFactory::create_provider(&config(name, Some("SE3")), 0.5);
+            assert!(provider.is_ok(), "{name} is listed as supported but cannot be built");
+        }
     }
 
     // The old behaviour logged "Unknown provider type, using elpriset_just_nu" and carried on,

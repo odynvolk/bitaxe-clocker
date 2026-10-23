@@ -1,14 +1,25 @@
 # rustfmt configuration.
 #
-# Only list keys that are BOTH stable on `cargo fmt` AND non-default.
-# Nightly-only keys are accepted but silently ignored by stable rustfmt — no warning,
-# no error, no effect — so a config file can claim rules that never actually apply.
-# The previous version of this file did exactly that: of 12 keys, 9 were rustfmt
-# defaults and 3 (`single_line_if_else_max_width`, `struct_lit_width`,
-# `struct_variant_width`) were nightly-only and inert.
+# Two keys here. Both are accepted by stable `cargo fmt` and both differ from
+# rustfmt's own defaults.
 #
-# Verify a change is actually taking effect with:
+# The rule this file failed before: an unrecognised key is not rejected by
+# rustfmt with an error. Stable rustfmt accepts it and, depending on the key,
+# either applies it or quietly does nothing - and `cargo fmt` reports success
+# either way. So a key can sit here for months doing nothing, and the config
+# file then reads as though a rule is enforced when nothing is checking it.
+#
+# Verify any change here actually takes effect, rather than assuming it did:
 #   cargo fmt -- --check
+# and, for a key with visible layout effects, confirm a file that would be
+# formatted differently with and without it.
+
+# Rust edition. Default for standalone `rustfmt` is 2015, which cannot parse this
+# code at all - bare `rustfmt --check src/bitaxe.rs` fails with
+# "error[E0670]: `async fn` is not permitted in Rust 2015". `cargo fmt` infers the
+# edition from Cargo.toml, so it was unaffected either way; this is for editors
+# and direct invocation.
+edition = "2021"
 
 # Default is 100.
 max_width = 120

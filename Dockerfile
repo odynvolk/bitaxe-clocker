@@ -8,6 +8,14 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends pkg-config libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
+# Bring in the source.
+#
+# `rust-toolchain.toml` is excluded via .dockerignore, so the toolchain this image
+# is built on is the one that runs this build. If it were copied in, rustup would
+# see its request for `stable` and, finding the image's toolchain registered under
+# an exact version name instead, try to download another one at build time.
+COPY . .
+
 # Build the release.
 #
 # `--locked` refuses to re-resolve dependencies: it fails the build if Cargo.lock
