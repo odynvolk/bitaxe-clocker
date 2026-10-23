@@ -1,4 +1,3 @@
-use crate::common;
 use crate::logger;
 use crate::price_providers::{parse_price_data, PriceError, PriceProvider};
 use reqwest::Client;
@@ -15,11 +14,14 @@ pub struct ElPrisetJustNuConfig {
 /// Price provider implementation for elpriset-just-nu.se.
 pub struct ElPrisetJustNuProvider {
     config: ElPrisetJustNuConfig,
+    /// Used when the price API is unreachable, so a pricing outage degrades to a
+    /// configured frequency instead of stalling the loop.
+    fallback_price: f64,
 }
 
 impl ElPrisetJustNuProvider {
-    pub fn new(config: ElPrisetJustNuConfig) -> Self {
-        Self { config }
+    pub fn new(config: ElPrisetJustNuConfig, fallback_price: f64) -> Self {
+        Self { config, fallback_price }
     }
 }
 
@@ -42,8 +44,8 @@ impl PriceProvider for ElPrisetJustNuProvider {
                 let json: serde_json::Value = response.json().await?;
                 parse_price_data(&json, now)?
             } else {
-                logger::error(&format!("Error getting price using default"));
-                common::CONFIG.get().ok_or(PriceError::InvalidPrice)?.prices.default
+                logger::error("Error getting price using default");
+                self.fallback_price
             };
 
             logger::info(&format!("Current electricity price {:?}", current_price));

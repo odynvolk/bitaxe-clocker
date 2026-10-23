@@ -1,4 +1,5 @@
 use bitaxe_clocker::common::Bitaxe;
+use bitaxe_clocker::common::Prices;
 
 #[test]
 fn test_determine_target_mode_cheap() {
@@ -9,7 +10,7 @@ fn test_determine_target_mode_cheap() {
         cheap: 590,
     };
 
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.05, &bitaxe, 0.1, 0.8);
+    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.05, &bitaxe, &prices());
     assert_eq!(mode, 590);
 }
 
@@ -22,7 +23,7 @@ fn test_determine_target_mode_default() {
         cheap: 590,
     };
 
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.5, &bitaxe, 0.1, 0.8);
+    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.5, &bitaxe, &prices());
     assert_eq!(mode, 550);
 }
 
@@ -35,7 +36,7 @@ fn test_determine_target_mode_expensive() {
         cheap: 590,
     };
 
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(1.0, &bitaxe, 0.1, 0.8);
+    let mode = bitaxe_clocker::bitaxe::determine_target_mode(1.0, &bitaxe, &prices());
     assert_eq!(mode, 50);
 }
 
@@ -49,7 +50,7 @@ fn test_determine_target_mode_boundary_cheap() {
     };
 
     // Price exactly at cheap threshold should be default (not cheap)
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.1, &bitaxe, 0.1, 0.8);
+    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.1, &bitaxe, &prices());
     assert_eq!(mode, 550);
 }
 
@@ -63,7 +64,7 @@ fn test_determine_target_mode_boundary_expensive() {
     };
 
     // Price exactly at expensive threshold should be expensive (not default)
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.8, &bitaxe, 0.1, 0.8);
+    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.8, &bitaxe, &prices());
     assert_eq!(mode, 50);
 }
 
@@ -117,6 +118,84 @@ async fn network_failure_keeps_the_transport_error_as_source() {
         err.source().is_some(),
         "transport error was flattened into a string; the underlying cause is lost"
     );
+}
+
+// These three are the reason the global CONFIG had to go: `should_switch_frequency_to`
+// read its thresholds out of a `OnceCell` that can only be set once per process, so it
+// could not be driven from a test at all.
+
+fn prices() -> Prices {
+    Prices {
+        cheap: 0.1,
+        expensive: 0.8,
+        default: 0.5,
+    }
+}
+
+/// Stands up a device reporting `frequency` as its current running frequency.
+/// Returns the mock so each test can assert the info endpoint was actually queried.
+async fn device_running_at(server: &mut mockito::Server, frequency: i32) -> (Bitaxe, mockito::Mock) {
+    let mock = server
+        .mock("GET", "/api/system/info")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(format!(r#"{{"frequency": {frequency}}}"#))
+        .create();
+
+    let bitaxe = Bitaxe {
+        host: server.url().replace("http://", ""),
+        expensive: 50,
+        default: 550,
+        cheap: 590,
+    };
+
+    (bitaxe, mock)
+}
+
+#[tokio::test]
+async fn requests_no_change_when_device_already_runs_target_frequency() {
+    let mut server = mockito::Server::new_async().await;
+    let (bitaxe, info) = device_running_at(&mut server, 590).await;
+    let client = reqwest::Client::builder().build().unwrap();
+
+    // 0.05 is below the cheap threshold, and this device's cheap frequency is 590 -
+    // the same it is already running, so no change is wanted.
+    let switch_to = bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, &bitaxe, 0.05, &prices())
+        .await
+        .unwrap();
+
+    assert_eq!(switch_to, -1, "no restart should be requested");
+    info.assert();
+}
+
+#[tokio::test]
+async fn requests_the_target_frequency_when_the_device_is_running_something_else() {
+    let mut server = mockito::Server::new_async().await;
+    let (bitaxe, info) = device_running_at(&mut server, 500).await;
+    let client = reqwest::Client::builder().build().unwrap();
+
+    let switch_to = bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, &bitaxe, 0.05, &prices())
+        .await
+        .unwrap();
+
+    assert_eq!(switch_to, 590);
+    info.assert();
+}
+
+#[tokio::test]
+async fn throttles_down_when_price_reaches_the_expensive_threshold() {
+    let mut server = mockito::Server::new_async().await;
+    let (bitaxe, info) = device_running_at(&mut server, 550).await;
+    let client = reqwest::Client::builder().build().unwrap();
+
+    // Exactly at the expensive threshold, which the boundary tests already pin as
+    // the expensive branch.
+    let switch_to = bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, &bitaxe, 0.8, &prices())
+        .await
+        .unwrap();
+
+    assert_eq!(switch_to, 50);
+    info.assert();
 }
 
 #[tokio::test]

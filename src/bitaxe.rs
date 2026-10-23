@@ -20,35 +20,30 @@ pub enum BitaxeError {
     UpdateRejected,
 }
 
-/// Determines the target frequency based on current price and thresholds.
-/// Returns: cheap if price < cheap, default if cheap <= price < expensive, expensive if price >= expensive
-pub fn determine_target_mode(
-    current_price: f64,
-    bitaxe: &common::Bitaxe,
-    cheap_threshold: f64,
-    expensive_threshold: f64,
-) -> i32 {
-    if current_price < cheap_threshold {
+/// Picks the frequency this device should run at for the given price.
+/// Returns a frequency rather than a mode label: callers compare it against the
+/// frequency the device reports and send it straight back to the device.
+/// Below `prices.cheap` -> the device's cheap frequency, below `prices.expensive`
+/// -> its default, at or above `prices.expensive` -> its expensive one.
+pub fn determine_target_mode(current_price: f64, bitaxe: &common::Bitaxe, prices: &common::Prices) -> i32 {
+    if current_price < prices.cheap {
         bitaxe.cheap
-    } else if current_price < expensive_threshold {
+    } else if current_price < prices.expensive {
         bitaxe.default
     } else {
         bitaxe.expensive
     }
 }
 
+/// Frequency the device should be changed to, or `-1` when it is already running it.
 pub async fn should_switch_frequency_to(
     client: &reqwest::Client,
     bitaxe: &common::Bitaxe,
     current_price: f64,
-) -> Result<i32, Box<dyn std::error::Error>> {
+    prices: &common::Prices,
+) -> Result<i32, BitaxeError> {
     let running_mode: i32 = get_running_mode(client, bitaxe).await?;
-    let switch_to_mode: i32 = determine_target_mode(
-        current_price,
-        bitaxe,
-        common::CONFIG.get().unwrap().prices.cheap,
-        common::CONFIG.get().unwrap().prices.expensive,
-    );
+    let switch_to_mode: i32 = determine_target_mode(current_price, bitaxe, prices);
     let switch_frequency_to: i32 = if running_mode != switch_to_mode {
         switch_to_mode
     } else {

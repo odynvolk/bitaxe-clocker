@@ -1,38 +1,34 @@
 use crate::common;
-use crate::logger;
-use crate::price_providers::PriceProvider;
+use crate::price_providers::{ElPrisetJustNuProvider, PriceProvider};
 
 /// Factory for creating price provider instances.
 /// Centralized location for provider instantiation logic.
 pub struct PriceProviderFactory;
 
 impl PriceProviderFactory {
-    /// Creates a price provider instance based on the configuration.
-    pub fn create_provider(provider_type: &str, config: &common::PriceProviderConfig) -> Box<dyn PriceProvider> {
-        match provider_type {
-            "elpriset_just_nu" => create_elpriset_provider(config),
-            _ => {
-                // Default to elpriset_just_nu if unknown provider type
-                logger::info(&format!(
-                    "Unknown provider type '{}', using elpriset_just_nu",
-                    provider_type
-                ));
-                create_elpriset_provider(config)
+    /// Builds the provider named by `config.provider_type`.
+    ///
+    /// Every failure here is a configuration mistake, so it is returned rather than
+    /// guessed at: the previous behaviour was to log and fall back to
+    /// `elpriset_just_nu` for any unrecognised name, which means a daemon set up for
+    /// one market would quietly price itself against another.
+    pub fn create_provider(
+        config: &common::PriceProviderConfig,
+        fallback_price: f64,
+    ) -> Result<Box<dyn PriceProvider>, common::ConfigError> {
+        match config.provider_type.as_str() {
+            "elpriset_just_nu" => {
+                let elpriset_config = config
+                    .elpriset_just_nu
+                    .as_ref()
+                    .ok_or_else(|| common::ConfigError::MissingProviderSection("elpriset_just_nu".to_string()))?;
+
+                Ok(Box::new(ElPrisetJustNuProvider::new(
+                    elpriset_config.clone(),
+                    fallback_price,
+                )))
             }
+            other => Err(common::ConfigError::UnknownProvider(other.to_string())),
         }
     }
-}
-
-/// Helper function to create an ElPrisetJustNuProvider instance.
-/// Extracted to avoid code duplication between match arms.
-fn create_elpriset_provider(config: &common::PriceProviderConfig) -> Box<dyn PriceProvider> {
-    let elpriset_config = config
-        .elpriset_just_nu
-        .as_ref()
-        .expect("elpriset_just_nu provider requires elpriset_just_nu config");
-    Box::new(crate::price_providers::ElPrisetJustNuProvider::new(
-        crate::price_providers::ElPrisetJustNuConfig {
-            price_zone: elpriset_config.price_zone.clone(),
-        },
-    ))
 }

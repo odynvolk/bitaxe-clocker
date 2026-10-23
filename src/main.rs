@@ -10,13 +10,13 @@ use tokio::{signal, time as tokio_time};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _config = bitaxe_clocker::common::load_config().map_err(|e| format!("Failed to load config: {}", e))?;
+    // Installed first, on purpose: `tracing` events emitted before a subscriber is
+    // installed are discarded rather than buffered, and `load_config` emits one.
     bitaxe_clocker::logger::init();
 
-    logger::info(&format!(
-        "Bitaxe Clocker Config {:?}",
-        &bitaxe_clocker::common::CONFIG.get().unwrap().bitaxes
-    ));
+    let config = bitaxe_clocker::common::load_config()?;
+
+    logger::info(&format!("Bitaxe Clocker Config {:?}", config.bitaxes));
 
     // Atomic flag to track shutdown request, wrapped in Arc for sharing
     let shutdown_requested = Arc::new(AtomicBool::new(false));
@@ -31,16 +31,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger::info("Shutdown signal received");
     });
 
-    let check_interval = 1000 * 60 * &bitaxe_clocker::common::CONFIG.get().unwrap().check_interval;
+    let check_interval = 1000 * 60 * config.check_interval;
     let client = Client::builder().timeout(std_time::Duration::from_secs(10)).build()?;
-    let price_provider = PriceProviderFactory::create_provider(
-        &bitaxe_clocker::common::CONFIG
-            .get()
-            .unwrap()
-            .price_provider
-            .provider_type,
-        &bitaxe_clocker::common::CONFIG.get().unwrap().price_provider,
-    );
+    let price_provider = PriceProviderFactory::create_provider(&config.price_provider, config.prices.default)?;
 
     loop {
         if shutdown_requested.load(Ordering::SeqCst) {
@@ -48,12 +41,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
 
-        for bitaxe in &bitaxe_clocker::common::CONFIG.get().unwrap().bitaxes {
+        for bitaxe in &config.bitaxes {
             logger::info(&format!("Checking {}", bitaxe.host));
             if let Err(e) = async {
                 let current_price: f64 = price_provider.get_current_price(&client).await?;
                 let switch_frequency_to: i32 =
-                    bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, bitaxe, current_price).await?;
+                    bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, bitaxe, current_price, &config.prices)
+                        .await?;
                 if switch_frequency_to != -1 {
                     bitaxe_clocker::bitaxe::switch_frequency(&client, bitaxe, switch_frequency_to).await?;
                 }
@@ -65,10 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        logger::info(&format!(
-            "Sleeping for {:?} minutes",
-            &bitaxe_clocker::common::CONFIG.get().unwrap().check_interval
-        ));
+        logger::info(&format!("Sleeping for {:?} minutes", config.check_interval));
         let ten_millis = std_time::Duration::from_millis(check_interval.try_into().unwrap());
         tokio_time::sleep(ten_millis).await;
     }

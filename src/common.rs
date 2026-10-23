@@ -1,8 +1,22 @@
 use crate::logger;
-use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("failed to read config.toml: {0}")]
+    Read(#[from] std::io::Error),
+
+    #[error("invalid config.toml: {0}")]
+    Parse(#[from] toml::de::Error),
+
+    #[error("unknown price provider '{0}'; expected one of: elpriset_just_nu")]
+    UnknownProvider(String),
+
+    #[error("price provider '{0}' requires a [price_provider.{0}] section")]
+    MissingProviderSection(String),
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -34,9 +48,7 @@ pub struct Prices {
     pub default: f64,
 }
 
-pub static CONFIG: OnceCell<Config> = OnceCell::new();
-
-pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
+pub fn load_config() -> Result<Config, ConfigError> {
     let mut file = File::open("config.toml")?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
@@ -44,12 +56,5 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     let config: Config = toml::from_str(&contents)?;
     logger::info(&format!("Config: {:?}", config));
 
-    if !CONFIG.set(config).is_ok() {
-        logger::info("Config already initialized");
-    }
-
-    Ok(CONFIG
-        .get()
-        .ok_or_else(|| Box::<dyn std::error::Error>::from("Config not initialized"))?
-        .clone())
+    Ok(config)
 }
