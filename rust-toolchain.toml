@@ -1,0 +1,5 @@
+[toolchain]
+# Single source of truth for the Rust toolchain, enforced automatically by rustup.
+# Replaces `.tool-versions`, which named a version asdf had no plugin to install.
+# The Docker base image is kept in sync with this channel (see Dockerfile).
+channel = "stable"

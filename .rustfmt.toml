@@ -1,35 +1,14 @@
-# Rust code formatting configuration
+# rustfmt configuration.
+#
+# Only list keys that are BOTH stable on `cargo fmt` AND non-default.
+# Nightly-only keys are accepted but silently ignored by stable rustfmt — no warning,
+# no error, no effect — so a config file can claim rules that never actually apply.
+# The previous version of this file did exactly that: of 12 keys, 9 were rustfmt
+# defaults and 3 (`single_line_if_else_max_width`, `struct_lit_width`,
+# `struct_variant_width`) were nightly-only and inert.
+#
+# Verify a change is actually taking effect with:
+#   cargo fmt -- --check
 
-# Maximum line length
+# Default is 100.
 max_width = 120
-
-# Number of spaces per tab
-hard_tabs = false
-
-# Tab width
-tab_spaces = 4
-
-# Use single line for short if/let statements
-single_line_if_else_max_width = 50
-
-# Reorder imports
-reorder_imports = true
-
-# Edition
-edition = "2021"
-
-# Force trailing semicolons
-merge_derives = true
-
-# Remove unnecessary parentheses
-remove_nested_parens = true
-
-# Match arm indentation
-match_arm_leading_pipes = "Never"
-
-# Use try expression
-use_try_shorthand = false
-
-# Width config
-struct_lit_width = 18
-struct_variant_width = 16

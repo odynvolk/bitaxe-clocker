@@ -10,7 +10,26 @@ Prerequisites:
 
 - Rust lang
 
-An easy way to setup Rust is to use [asdf](https://asdf-vm.com/). Then run `asdf install` to get the proper version specified in the project.
+The required toolchain is pinned in `rust-toolchain.toml` and is selected automatically by
+[rustup](https://rustup.rs/) — just run `cargo build`. There is no need to install a specific
+version by hand.
+
+## Development
+
+There is no CI in this repository, so these checks are run by hand before committing:
+
+```bash
+cargo fmt -- --check                        # formatting
+cargo clippy --all-targets -- -D warnings   # lints, warnings are errors
+NODE_ENV=test cargo test                    # test suite
+cargo build --release                       # release build
+```
+
+Both config files in this repo are worth knowing about before you touch them: a key name that
+clippy or rustfmt does not recognise does **not** produce a warning. Clippy aborts the entire
+build with an `unknown field` error, and stable rustfmt silently ignores the key and carries on.
+Re-run the two commands above after any edit to `rust-toolchain.toml` or `.rustfmt.toml` to
+confirm the change is actually in effect.
 
 ## Usage
 1) Create a `config.toml` from the `config.example.toml` and place it in the main directory.
