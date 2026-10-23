@@ -71,7 +71,7 @@ fn test_determine_target_mode_boundary_expensive() {
 async fn test_get_running_mode_success() {
     let fixture = std::fs::read_to_string("tests/fixtures/bitaxe_info.json").unwrap();
     let mut mock_server = mockito::Server::new_async().await;
-    let _mock = mock_server
+    let mock_info = mock_server
         .mock("GET", "/api/system/info")
         .with_status(200)
         .with_header("content-type", "application/json")
@@ -90,12 +90,13 @@ async fn test_get_running_mode_success() {
         .await
         .unwrap();
     assert_eq!(running_mode, 500);
+    mock_info.assert();
 }
 
 #[tokio::test]
 async fn test_switch_frequency_success() {
     let mut mock_server = mockito::Server::new_async().await;
-    let _mock = mock_server
+    let mock_patch = mock_server
         .mock("PATCH", "/api/system")
         .with_status(200)
         .with_header("content-type", "application/json")
@@ -117,17 +118,24 @@ async fn test_switch_frequency_success() {
 
     let result = bitaxe_clocker::bitaxe::switch_frequency(&client, &bitaxe, 590).await;
     assert!(result.is_ok());
-    let _ = mock_server;
-    let _ = mock_restart;
+    mock_patch.assert();
+    mock_restart.assert();
 }
 
 #[tokio::test]
 async fn test_switch_frequency_failure() {
     let mut mock_server = mockito::Server::new_async().await;
-    let _mock = mock_server
+    let mock_patch = mock_server
         .mock("PATCH", "/api/system")
         .with_status(500)
         .with_header("content-type", "application/json")
+        .create();
+
+    // A failed frequency update must never reach the restart endpoint.
+    let mock_restart = mock_server
+        .mock("POST", "/api/system/restart")
+        .with_status(200)
+        .expect_at_most(0)
         .create();
 
     let client = reqwest::Client::builder().build().unwrap();
@@ -147,6 +155,8 @@ async fn test_switch_frequency_failure() {
         }
         _ => panic!("Expected NetworkError variant"),
     }
+    mock_patch.assert();
+    mock_restart.assert();
 }
 
 #[cfg(test)]
