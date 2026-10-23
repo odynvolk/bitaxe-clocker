@@ -3,11 +3,11 @@
 # Two keys here. Both are accepted by stable `cargo fmt` and both differ from
 # rustfmt's own defaults.
 #
-# The rule this file failed before: an unrecognised key is not rejected by
-# rustfmt with an error. Stable rustfmt accepts it and, depending on the key,
-# either applies it or quietly does nothing - and `cargo fmt` reports success
-# either way. So a key can sit here for months doing nothing, and the config
-# file then reads as though a rule is enforced when nothing is checking it.
+# The rule this file failed before: an unrecognised key IS reported - rustfmt prints
+# "invalid key=val pair". The quiet one is a key rustfmt recognises but does not implement
+# on stable: accepted, no warning, no effect, and `cargo fmt` still exits 0. So a key can sit
+# here for months doing nothing, and the config file then reads as though a rule is enforced
+# when nothing is checking it.
 #
 # Verify any change here actually takes effect, rather than assuming it did:
 #   cargo fmt -- --check

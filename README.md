@@ -10,9 +10,11 @@ Prerequisites:
 
 - Rust lang
 
-The required toolchain is pinned in `rust-toolchain.toml` and is selected automatically by
-[rustup](https://rustup.rs/) — just run `cargo build`. There is no need to install a specific
-version by hand.
+The toolchain used for local development is declared in `rust-toolchain.toml` and selected
+automatically by [rustup](https://rustup.rs/) — just run `cargo build`. There is no need to
+install a specific version by hand. It names the `stable` channel rather than an exact
+version, so nothing has to be downloaded to start work; it does not apply to the Docker
+image, which pins its own.
 
 ## Development
 
@@ -25,11 +27,13 @@ cargo test                                  # test suite
 cargo build --release --locked              # release build
 ```
 
-Both config files in this repo are worth knowing about before you touch them: a key name that
-clippy or rustfmt does not recognise does **not** produce a warning. Clippy aborts the entire
-build with an `unknown field` error, and stable rustfmt silently ignores the key and carries on.
-Re-run the two commands above after any edit to `rust-toolchain.toml` or `.rustfmt.toml` to
-confirm the change is actually in effect.
+Both config files in this repo are worth knowing about before you touch them, because each
+fails in the opposite way. A key clippy does not recognise aborts the entire build with an
+`unknown field` error, so nothing lints and the reason looks like a code problem. A key
+rustfmt recognises but does not implement on stable is accepted, silently does nothing, and
+`cargo fmt` still exits 0. Re-run the checks above after editing either file, and for a
+rustfmt key with visible layout effects, confirm a file really is formatted differently with
+and without it.
 
 ## Upgrading
 
@@ -47,7 +51,7 @@ it behaves once running:
 - **The Docker container runs as uid 10001** rather than root, so a mounted `config.toml`
   must be world-readable.
 
-Log output also changed shape, from `INFO msg: Checking 192.168.8.1` to structured fields:
+Log output also changed shape, from `INFO msg="Checking 192.168.8.1"` to structured fields:
 `INFO Checking device host=192.168.8.1`. Anything grepping the old format needs updating.
 
 ## Usage
@@ -270,14 +274,18 @@ impl PriceProviderFactory {
                     fallback_price,
                 )))
             }
-            other => Err(common::ConfigError::UnknownProvider(other.to_string())),
+            other => Err(common::ConfigError::UnknownProvider(format!(
+                "'{other}'; supported providers: {}",
+                SUPPORTED_PROVIDERS.join(", ")
+            ))),
         }
     }
 }
 ```
 
-A new provider needs a matching arm in `ConfigError::UnknownProvider`'s message so the
-error names the providers that are actually available.
+A new provider also needs its name added to `SUPPORTED_PROVIDERS` in the same file, which is
+what the error message reports. `listed_provider_is_actually_buildable` fails if the two
+drift apart.
 
 5. **Update the configuration** in `config.toml`:
 

@@ -65,6 +65,10 @@ mod tests {
 
     /// Guards the error text: an entry added to `SUPPORTED_PROVIDERS` without a matching
     /// match arm would otherwise be advertised to users as available while being rejected.
+    ///
+    /// `config` can only populate the elpriset section, so a second provider added here
+    /// will fail this test with "cannot be built" until `config` learns to fill in that
+    /// provider's own sub-configuration. Failure for the wrong reason, but a failure.
     #[test]
     fn listed_provider_is_actually_buildable() {
         for name in SUPPORTED_PROVIDERS {
