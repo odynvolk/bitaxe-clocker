@@ -1,4 +1,3 @@
-use crate::logger;
 use crate::price_providers::{parse_price_data, PriceError, PriceProvider};
 use reqwest::Client;
 use reqwest::StatusCode;
@@ -38,18 +37,18 @@ impl PriceProvider for ElPrisetJustNuProvider {
                 now.format("%Y/%m-%d"),
                 self.config.price_zone
             );
-            logger::info(&format!("Getting electricity price from URL {}", url));
+            tracing::info!(url = %url, "Getting electricity price");
 
             let response = client.get(url).send().await?;
             let current_price = if response.status() == StatusCode::OK {
                 let json: serde_json::Value = response.json().await?;
                 parse_price_data(&json, now)?
             } else {
-                logger::error("Error getting price using default");
+                tracing::error!("Error getting price using default");
                 self.fallback_price
             };
 
-            logger::info(&format!("Current electricity price {:?}", current_price));
+            tracing::info!(sek_per_kwh = current_price, "Current electricity price");
             Ok(current_price)
         })
     }

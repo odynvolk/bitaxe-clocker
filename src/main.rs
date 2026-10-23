@@ -1,4 +1,3 @@
-use bitaxe_clocker::logger;
 use bitaxe_clocker::price_providers::PriceProviderFactory;
 use reqwest::Client;
 use std::{
@@ -16,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = bitaxe_clocker::common::load_config()?;
 
-    logger::info(&format!("Bitaxe Clocker Config {:?}", config.bitaxes));
+    tracing::info!(devices = ?config.bitaxes, "Starting Bitaxe Clocker");
 
     // Atomic flag to track shutdown request, wrapped in Arc for sharing
     let shutdown_requested = Arc::new(AtomicBool::new(false));
@@ -24,11 +23,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up Ctrl-C signal handler
     let shutdown_clone = Arc::clone(&shutdown_requested);
     tokio::spawn(async move {
-        if let Err(_err) = signal::ctrl_c().await {
-            logger::error("Failed to set up Ctrl-C handler");
+        if let Err(err) = signal::ctrl_c().await {
+            tracing::error!(error = %err, "Failed to set up Ctrl-C handler");
         }
         shutdown_clone.store(true, Ordering::SeqCst);
-        logger::info("Shutdown signal received");
+        tracing::info!("Shutdown signal received");
     });
 
     let sleep_duration = config.sleep_duration()?;
@@ -37,12 +36,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         if shutdown_requested.load(Ordering::SeqCst) {
-            logger::info("Shutting down...");
+            tracing::info!("Shutting down...");
             break;
         }
 
         for bitaxe in &config.bitaxes {
-            logger::info(&format!("Checking {}", bitaxe.host));
+            tracing::info!(host = %bitaxe.host, "Checking device");
             if let Err(e) = async {
                 let current_price: f64 = price_provider.get_current_price(&client).await?;
                 if let Some(frequency) =
@@ -55,14 +54,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             .await
             {
-                logger::error(&format!("Error processing {}: {}", bitaxe.host, e));
+                tracing::error!(host = %bitaxe.host, error = %e, "Error processing device");
             }
         }
 
-        logger::info(&format!("Sleeping for {:?} minutes", config.check_interval));
+        tracing::info!(minutes = config.check_interval, "Sleeping");
         tokio_time::sleep(sleep_duration).await;
     }
 
-    logger::info("Goodbye!");
+    tracing::info!("Goodbye!");
     Ok(())
 }

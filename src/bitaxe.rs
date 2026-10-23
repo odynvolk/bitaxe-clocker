@@ -3,7 +3,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::common;
-use crate::logger;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BitaxeError {
@@ -55,13 +54,13 @@ pub fn parse_running_frequency(json: &Value) -> Result<i32, BitaxeError> {
 /// The frequency the device reports as currently running.
 pub async fn running_frequency(client: &reqwest::Client, bitaxe: &common::Bitaxe) -> Result<i32, BitaxeError> {
     let url = format!("http://{}/api/system/info", bitaxe.host);
-    logger::info(&format!("Getting Bitaxe info from URL {}", url));
+    tracing::info!(url = %url, "Getting Bitaxe info");
 
     let response = client.get(url).send().await?;
     let json: Value = response.json().await?;
 
     let frequency = parse_running_frequency(&json)?;
-    logger::info(&format!("Running frequency {}", frequency));
+    tracing::info!(frequency, "Running frequency");
 
     Ok(frequency)
 }
@@ -71,7 +70,7 @@ pub async fn switch_frequency(
     bitaxe: &common::Bitaxe,
     frequency: i32,
 ) -> Result<(), BitaxeError> {
-    logger::info(&format!("Switching frequency to {}", frequency));
+    tracing::info!(frequency, "Switching frequency");
     let mut body = HashMap::new();
     body.insert("frequency", frequency);
     let response = client
@@ -81,14 +80,14 @@ pub async fn switch_frequency(
         .await?;
 
     if response.status() == StatusCode::OK {
-        logger::info("Restarting!");
+        tracing::info!("Restarting!");
         client
             .post(format!("http://{}/api/system/restart", bitaxe.host))
             .send()
             .await?;
         Ok(())
     } else {
-        logger::error(&format!("Something went wrong when updating {}", bitaxe.host));
+        tracing::error!(host = %bitaxe.host, "Something went wrong when updating");
         Err(BitaxeError::UpdateRejected)
     }
 }

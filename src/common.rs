@@ -1,4 +1,3 @@
-use crate::logger;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
@@ -80,7 +79,7 @@ pub fn load_config() -> Result<Config, ConfigError> {
     file.read_to_string(&mut contents)?;
 
     let config = parse_config(&contents)?;
-    logger::info(&format!("Config: {:?}", config));
+    tracing::info!(config = ?config, "Loaded config");
 
     Ok(config)
 }
