@@ -2,7 +2,7 @@ use bitaxe_clocker::common::Bitaxe;
 use bitaxe_clocker::common::Prices;
 
 #[test]
-fn test_determine_target_mode_cheap() {
+fn test_target_frequency_cheap() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
         expensive: 50,
@@ -10,12 +10,12 @@ fn test_determine_target_mode_cheap() {
         cheap: 590,
     };
 
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.05, &bitaxe, &prices());
+    let mode = bitaxe_clocker::bitaxe::target_frequency(0.05, &bitaxe, &prices());
     assert_eq!(mode, 590);
 }
 
 #[test]
-fn test_determine_target_mode_default() {
+fn test_target_frequency_default() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
         expensive: 50,
@@ -23,12 +23,12 @@ fn test_determine_target_mode_default() {
         cheap: 590,
     };
 
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.5, &bitaxe, &prices());
+    let mode = bitaxe_clocker::bitaxe::target_frequency(0.5, &bitaxe, &prices());
     assert_eq!(mode, 550);
 }
 
 #[test]
-fn test_determine_target_mode_expensive() {
+fn test_target_frequency_expensive() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
         expensive: 50,
@@ -36,12 +36,12 @@ fn test_determine_target_mode_expensive() {
         cheap: 590,
     };
 
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(1.0, &bitaxe, &prices());
+    let mode = bitaxe_clocker::bitaxe::target_frequency(1.0, &bitaxe, &prices());
     assert_eq!(mode, 50);
 }
 
 #[test]
-fn test_determine_target_mode_boundary_cheap() {
+fn test_target_frequency_boundary_cheap() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
         expensive: 50,
@@ -50,12 +50,12 @@ fn test_determine_target_mode_boundary_cheap() {
     };
 
     // Price exactly at cheap threshold should be default (not cheap)
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.1, &bitaxe, &prices());
+    let mode = bitaxe_clocker::bitaxe::target_frequency(0.1, &bitaxe, &prices());
     assert_eq!(mode, 550);
 }
 
 #[test]
-fn test_determine_target_mode_boundary_expensive() {
+fn test_target_frequency_boundary_expensive() {
     let bitaxe = Bitaxe {
         host: "192.168.8.227".to_string(),
         expensive: 50,
@@ -64,12 +64,12 @@ fn test_determine_target_mode_boundary_expensive() {
     };
 
     // Price exactly at expensive threshold should be expensive (not default)
-    let mode = bitaxe_clocker::bitaxe::determine_target_mode(0.8, &bitaxe, &prices());
+    let mode = bitaxe_clocker::bitaxe::target_frequency(0.8, &bitaxe, &prices());
     assert_eq!(mode, 50);
 }
 
 #[tokio::test]
-async fn test_get_running_mode_success() {
+async fn test_running_frequency_success() {
     let fixture = std::fs::read_to_string("tests/fixtures/bitaxe_info.json").unwrap();
     let mut mock_server = mockito::Server::new_async().await;
     let mock_info = mock_server
@@ -87,10 +87,10 @@ async fn test_get_running_mode_success() {
         cheap: 590,
     };
 
-    let running_mode = bitaxe_clocker::bitaxe::get_running_mode(&client, &bitaxe)
+    let frequency = bitaxe_clocker::bitaxe::running_frequency(&client, &bitaxe)
         .await
         .unwrap();
-    assert_eq!(running_mode, 500);
+    assert_eq!(frequency, 500);
     mock_info.assert();
 }
 
@@ -110,7 +110,7 @@ async fn network_failure_keeps_the_transport_error_as_source() {
         cheap: 590,
     };
 
-    let err = bitaxe_clocker::bitaxe::get_running_mode(&client, &bitaxe)
+    let err = bitaxe_clocker::bitaxe::running_frequency(&client, &bitaxe)
         .await
         .unwrap_err();
 
@@ -120,7 +120,7 @@ async fn network_failure_keeps_the_transport_error_as_source() {
     );
 }
 
-// These three are the reason the global CONFIG had to go: `should_switch_frequency_to`
+// These three are the reason the global CONFIG had to go: `frequency_to_switch_to`
 // read its thresholds out of a `OnceCell` that can only be set once per process, so it
 // could not be driven from a test at all.
 
@@ -160,11 +160,11 @@ async fn requests_no_change_when_device_already_runs_target_frequency() {
 
     // 0.05 is below the cheap threshold, and this device's cheap frequency is 590 -
     // the same it is already running, so no change is wanted.
-    let switch_to = bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, &bitaxe, 0.05, &prices())
+    let switch_to = bitaxe_clocker::bitaxe::frequency_to_switch_to(&client, &bitaxe, 0.05, &prices())
         .await
         .unwrap();
 
-    assert_eq!(switch_to, -1, "no restart should be requested");
+    assert_eq!(switch_to, None, "no restart should be requested");
     info.assert();
 }
 
@@ -174,11 +174,11 @@ async fn requests_the_target_frequency_when_the_device_is_running_something_else
     let (bitaxe, info) = device_running_at(&mut server, 500).await;
     let client = reqwest::Client::builder().build().unwrap();
 
-    let switch_to = bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, &bitaxe, 0.05, &prices())
+    let switch_to = bitaxe_clocker::bitaxe::frequency_to_switch_to(&client, &bitaxe, 0.05, &prices())
         .await
         .unwrap();
 
-    assert_eq!(switch_to, 590);
+    assert_eq!(switch_to, Some(590));
     info.assert();
 }
 
@@ -190,11 +190,11 @@ async fn throttles_down_when_price_reaches_the_expensive_threshold() {
 
     // Exactly at the expensive threshold, which the boundary tests already pin as
     // the expensive branch.
-    let switch_to = bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, &bitaxe, 0.8, &prices())
+    let switch_to = bitaxe_clocker::bitaxe::frequency_to_switch_to(&client, &bitaxe, 0.8, &prices())
         .await
         .unwrap();
 
-    assert_eq!(switch_to, 50);
+    assert_eq!(switch_to, Some(50));
     info.assert();
 }
 
@@ -263,37 +263,37 @@ async fn test_switch_frequency_failure() {
 }
 
 #[cfg(test)]
-mod parse_running_mode_tests {
+mod parse_running_frequency_tests {
     use serde_json::json;
 
     #[test]
-    fn test_parse_running_mode_success() {
+    fn test_parse_running_frequency_success() {
         let json = json!({
             "frequency": 500,
             "hashrate": 125.5,
             "temperature": 45.2
         });
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 500);
     }
 
     #[test]
-    fn test_parse_running_mode_with_fixture() {
+    fn test_parse_running_frequency_with_fixture() {
         let fixture_content = include_str!("../../tests/fixtures/bitaxe_info.json");
         let json: serde_json::Value = serde_json::from_str(fixture_content).unwrap();
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 500);
     }
 
     #[test]
-    fn test_parse_running_mode_missing_frequency() {
+    fn test_parse_running_frequency_missing_frequency() {
         let json = json!({
             "hashrate": 125.5,
             "temperature": 45.2
         });
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -302,11 +302,11 @@ mod parse_running_mode_tests {
     }
 
     #[test]
-    fn test_parse_running_mode_invalid_frequency_type() {
+    fn test_parse_running_frequency_invalid_frequency_type() {
         let json = json!({
             "frequency": "not_a_number"
         });
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -315,39 +315,39 @@ mod parse_running_mode_tests {
     }
 
     #[test]
-    fn test_parse_running_mode_zero_frequency() {
+    fn test_parse_running_frequency_zero_frequency() {
         let json = json!({
             "frequency": 0
         });
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
-    fn test_parse_running_mode_large_frequency() {
+    fn test_parse_running_frequency_large_frequency() {
         let json = json!({
             "frequency": 999999
         });
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 999999);
     }
 
     #[test]
-    fn test_parse_running_mode_float_frequency() {
+    fn test_parse_running_frequency_float_frequency() {
         let json = json!({
             "frequency": 550.7
         });
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 550);
     }
 
     #[test]
-    fn test_parse_running_mode_empty_object() {
+    fn test_parse_running_frequency_empty_object() {
         let json = json!({});
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -356,11 +356,11 @@ mod parse_running_mode_tests {
     }
 
     #[test]
-    fn test_parse_running_mode_null_frequency() {
+    fn test_parse_running_frequency_null_frequency() {
         let json = json!({
             "frequency": null
         });
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -369,11 +369,11 @@ mod parse_running_mode_tests {
     }
 
     #[test]
-    fn test_parse_running_mode_negative_frequency() {
+    fn test_parse_running_frequency_negative_frequency() {
         let json = json!({
             "frequency": -100
         });
-        let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
+        let result = bitaxe_clocker::bitaxe::parse_running_frequency(&json);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), -100);
     }

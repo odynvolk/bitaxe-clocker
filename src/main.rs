@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger::info("Shutdown signal received");
     });
 
-    let check_interval = 1000 * 60 * config.check_interval;
+    let sleep_duration = config.sleep_duration()?;
     let client = Client::builder().timeout(std_time::Duration::from_secs(10)).build()?;
     let price_provider = PriceProviderFactory::create_provider(&config.price_provider, config.prices.default)?;
 
@@ -45,11 +45,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             logger::info(&format!("Checking {}", bitaxe.host));
             if let Err(e) = async {
                 let current_price: f64 = price_provider.get_current_price(&client).await?;
-                let switch_frequency_to: i32 =
-                    bitaxe_clocker::bitaxe::should_switch_frequency_to(&client, bitaxe, current_price, &config.prices)
-                        .await?;
-                if switch_frequency_to != -1 {
-                    bitaxe_clocker::bitaxe::switch_frequency(&client, bitaxe, switch_frequency_to).await?;
+                if let Some(frequency) =
+                    bitaxe_clocker::bitaxe::frequency_to_switch_to(&client, bitaxe, current_price, &config.prices)
+                        .await?
+                {
+                    bitaxe_clocker::bitaxe::switch_frequency(&client, bitaxe, frequency).await?;
                 }
                 Ok::<(), Box<dyn std::error::Error>>(())
             }
@@ -60,8 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         logger::info(&format!("Sleeping for {:?} minutes", config.check_interval));
-        let ten_millis = std_time::Duration::from_millis(check_interval.try_into().unwrap());
-        tokio_time::sleep(ten_millis).await;
+        tokio_time::sleep(sleep_duration).await;
     }
 
     logger::info("Goodbye!");

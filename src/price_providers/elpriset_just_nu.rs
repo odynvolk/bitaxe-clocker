@@ -1,6 +1,7 @@
 use crate::logger;
 use crate::price_providers::{parse_price_data, PriceError, PriceProvider};
 use reqwest::Client;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::future::Future;
 use std::pin::Pin;
@@ -40,7 +41,7 @@ impl PriceProvider for ElPrisetJustNuProvider {
             logger::info(&format!("Getting electricity price from URL {}", url));
 
             let response = client.get(url).send().await?;
-            let current_price = if response.status() == reqwest::StatusCode::OK {
+            let current_price = if response.status() == StatusCode::OK {
                 let json: serde_json::Value = response.json().await?;
                 parse_price_data(&json, now)?
             } else {

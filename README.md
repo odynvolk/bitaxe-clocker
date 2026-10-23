@@ -80,7 +80,7 @@ The application is configured via `config.toml`. Below is a reference of all ava
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `check_interval` | `i32` | How often to check prices and update frequency, in minutes. |
+| `check_interval` | `u64` | How often to check prices and update frequency, in minutes. Must not be negative. |
 
 ### Prices (under `[prices]`)
 
@@ -167,11 +167,14 @@ pub struct NordpoolConfig {
 /// Price provider implementation for Nordpool.
 pub struct NordpoolProvider {
     config: NordpoolConfig,
+    /// Returned when the price API is unreachable, so a pricing outage degrades to a
+    /// configured frequency instead of stalling the loop.
+    fallback_price: f64,
 }
 
 impl NordpoolProvider {
-    pub fn new(config: NordpoolConfig) -> Self {
-        Self { config }
+    pub fn new(config: NordpoolConfig, fallback_price: f64) -> Self {
+        Self { config, fallback_price }
     }
 }
 
@@ -227,25 +230,32 @@ pub struct PriceProviderConfig {
 
 ```rust
 impl PriceProviderFactory {
-    pub fn create_provider(provider_type: &str, config: &common::PriceProviderConfig) -> Box<dyn PriceProvider> {
-        match provider_type {
+    pub fn create_provider(
+        config: &common::PriceProviderConfig,
+        fallback_price: f64,
+    ) -> Result<Box<dyn PriceProvider>, common::ConfigError> {
+        match config.provider_type.as_str() {
             "elpriset_just_nu" => {
                 // existing implementation
             }
             "nordpool" => {
-                let nordpool_config = config.nordpool.as_ref()
-                    .expect("nordpool provider requires nordpool config");
-                Box::new(NordpoolProvider::new(NordpoolConfig {
-                    region: nordpool_config.region.clone(),
-                }))
+                let nordpool_config = config.nordpool.as_ref().ok_or_else(|| {
+                    common::ConfigError::MissingProviderSection("nordpool".to_string())
+                })?;
+
+                Ok(Box::new(NordpoolProvider::new(
+                    nordpool_config.clone(),
+                    fallback_price,
+                )))
             }
-            _ => {
-                // default fallback
-            }
+            other => Err(common::ConfigError::UnknownProvider(other.to_string())),
         }
     }
 }
 ```
+
+A new provider needs a matching arm in `ConfigError::UnknownProvider`'s message so the
+error names the providers that are actually available.
 
 5. **Update the configuration** in `config.toml`:
 
