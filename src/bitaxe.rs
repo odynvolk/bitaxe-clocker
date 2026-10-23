@@ -1,54 +1,23 @@
 use serde_json::Value;
 use std::collections::HashMap;
-use std::fmt;
 
 use crate::common;
 use crate::logger;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum BitaxeError {
-    NetworkMessage(String),
+    /// Transport-level failure. The `reqwest` error is retained as the source, so the
+    /// actual reason (refused, DNS, timeout) survives into the log rather than being
+    /// flattened into a string at conversion time.
+    #[error("Network error: {0}")]
+    Network(#[from] reqwest::Error),
+
+    #[error("Invalid frequency value")]
     InvalidFrequency,
-}
 
-impl fmt::Display for BitaxeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            BitaxeError::NetworkMessage(msg) => write!(f, "{}", msg),
-            BitaxeError::InvalidFrequency => write!(f, "Invalid frequency value"),
-        }
-    }
-}
-
-impl PartialEq for BitaxeError {
-    fn eq(&self, other: &Self) -> bool {
-        use BitaxeError::*;
-        match (self, other) {
-            (NetworkMessage(a), NetworkMessage(b)) => a == b,
-            (InvalidFrequency, InvalidFrequency) => true,
-            _ => false,
-        }
-    }
-}
-
-impl std::error::Error for BitaxeError {}
-
-impl From<reqwest::Error> for BitaxeError {
-    fn from(err: reqwest::Error) -> Self {
-        BitaxeError::NetworkMessage(format!("Network error: {}", err))
-    }
-}
-
-impl From<serde_json::Error> for BitaxeError {
-    fn from(err: serde_json::Error) -> Self {
-        BitaxeError::NetworkMessage(format!("JSON parsing error: {}", err))
-    }
-}
-
-impl From<std::io::Error> for BitaxeError {
-    fn from(err: std::io::Error) -> Self {
-        BitaxeError::NetworkMessage(format!("IO error: {}", err))
-    }
+    /// The device answered, but rejected the frequency update.
+    #[error("Failed to update Bitaxe")]
+    UpdateRejected,
 }
 
 /// Determines the target frequency based on current price and thresholds.
@@ -130,6 +99,6 @@ pub async fn switch_frequency(
         Ok(())
     } else {
         logger::error(&format!("Something went wrong when updating {}", bitaxe.host));
-        Err(BitaxeError::NetworkMessage("Failed to update Bitaxe".to_string()))
+        Err(BitaxeError::UpdateRejected)
     }
 }

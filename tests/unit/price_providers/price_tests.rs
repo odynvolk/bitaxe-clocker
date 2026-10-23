@@ -41,7 +41,7 @@ fn test_parse_price_data_before_range() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+    assert!(matches!(result.unwrap_err(), PriceError::InvalidPrice));
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn test_parse_price_data_after_range() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+    assert!(matches!(result.unwrap_err(), PriceError::InvalidPrice));
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn test_parse_price_data_empty_array() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+    assert!(matches!(result.unwrap_err(), PriceError::InvalidPrice));
 }
 
 #[test]
@@ -75,7 +75,7 @@ fn test_parse_price_data_not_array() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+    assert!(matches!(result.unwrap_err(), PriceError::InvalidPrice));
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn test_parse_price_data_missing_time_start() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), PriceError::ParseError);
+    assert!(matches!(result.unwrap_err(), PriceError::ParseError));
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_parse_price_data_missing_time_end() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), PriceError::ParseError);
+    assert!(matches!(result.unwrap_err(), PriceError::ParseError));
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn test_parse_price_data_invalid_datetime_format() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), PriceError::DateTimeParseError(_)));
+    assert!(matches!(result.unwrap_err(), PriceError::DateTimeParse(_)));
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn test_parse_price_data_missing_price_value() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+    assert!(matches!(result.unwrap_err(), PriceError::InvalidPrice));
 }
 
 #[test]
@@ -147,5 +147,5 @@ fn test_parse_price_data_price_not_number() {
     let result = parse_price_data(&json, now);
 
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), PriceError::InvalidPrice);
+    assert!(matches!(result.unwrap_err(), PriceError::InvalidPrice));
 }

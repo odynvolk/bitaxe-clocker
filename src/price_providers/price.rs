@@ -1,58 +1,21 @@
 use reqwest::Client;
-use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum PriceError {
-    NetworkMessage(String),
+    /// Transport-level failure, with the `reqwest` error kept as the source.
+    #[error("Network error: {0}")]
+    Network(#[from] reqwest::Error),
+
+    #[error("Failed to parse datetime")]
     ParseError,
+
+    #[error("Invalid price value")]
     InvalidPrice,
-    DateTimeParseError(chrono::ParseError),
-}
 
-impl fmt::Display for PriceError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            PriceError::NetworkMessage(msg) => write!(f, "{}", msg),
-            PriceError::ParseError => write!(f, "Failed to parse datetime"),
-            PriceError::InvalidPrice => write!(f, "Invalid price value"),
-            PriceError::DateTimeParseError(e) => write!(f, "DateTime parse error: {}", e),
-        }
-    }
-}
-
-impl PartialEq for PriceError {
-    fn eq(&self, other: &Self) -> bool {
-        use PriceError::*;
-        match (self, other) {
-            (NetworkMessage(a), NetworkMessage(b)) => a == b,
-            (ParseError, ParseError) => true,
-            (InvalidPrice, InvalidPrice) => true,
-            (DateTimeParseError(_), DateTimeParseError(_)) => true,
-            _ => false,
-        }
-    }
-}
-
-impl std::error::Error for PriceError {}
-
-impl From<reqwest::Error> for PriceError {
-    fn from(err: reqwest::Error) -> Self {
-        PriceError::NetworkMessage(format!("Network error: {}", err))
-    }
-}
-
-impl From<serde_json::Error> for PriceError {
-    fn from(err: serde_json::Error) -> Self {
-        PriceError::NetworkMessage(format!("JSON parsing error: {}", err))
-    }
-}
-
-impl From<chrono::ParseError> for PriceError {
-    fn from(err: chrono::ParseError) -> Self {
-        PriceError::DateTimeParseError(err)
-    }
+    #[error("DateTime parse error: {0}")]
+    DateTimeParse(#[from] chrono::ParseError),
 }
 
 /// Trait that all price providers must implement.

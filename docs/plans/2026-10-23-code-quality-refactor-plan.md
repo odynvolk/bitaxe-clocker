@@ -20,7 +20,7 @@ Evidence gathered during review (all reproduced by running tools):
 | 4 | Toolchain drift | `.tool-versions`=1.90.0 vs `Dockerfile` `rust:1.85-slim` |
 | 5 | `Cargo.lock` gitignored for a binary | `git ls-files` → not tracked |
 | 6 | `CONFIG` global via 8 × `CONFIG.get().unwrap()`; `_config` bound but unused | `grep -c` per file |
-| 7-10 | Three overlapping error strategies; `From<reqwest::Error>` drops the source; ~60 lines of hand-written boilerplate incl. dead `PartialEq`; `factory` silently defaults on one failure but `.expect()` panics on another | read + grep |
+| 7-10 | Three overlapping error strategies; `From<reqwest::Error>` drops the source; ~60 lines of hand-written boilerplate; `factory` silently defaults on one failure but `.expect()` panics on another. **Correction at U3:** the "dead `PartialEq`" claim was wrong — 13 tests compare errors via `assert_eq!`, which the original `==` grep could not match. `PartialEq` is load-bearing; removing it requires converting those 13 sites to `matches!` first. | read + grep |
 | 11-16 | `-1` sentinel; `== 200` vs `== StatusCode::OK`; hand-rolled `Pin<Box<dyn Future>>`; mode naming (`default` = two meanings); `ten_millis` holds minutes; i32 `try_into().unwrap()` in loop; `logger` wrapper forces `&format!` at 20 sites | read + grep |
 | 17-20 | **0 `.assert()` calls across 4 mockito mocks**; `tests/common.rs` dead; 18/29 tests on two parse fns; `tests/tests.rs` is a shim | grep |
 | 21-23 | `COPY . .` kills dep caching; stray tzdata layer; no `--locked`/`USER` | read |

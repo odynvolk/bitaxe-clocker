@@ -94,6 +94,32 @@ async fn test_get_running_mode_success() {
 }
 
 #[tokio::test]
+async fn network_failure_keeps_the_transport_error_as_source() {
+    use std::error::Error;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .unwrap();
+    // Nothing is listening on port 1, so the request fails at the transport layer.
+    let bitaxe = Bitaxe {
+        host: "127.0.0.1:1".to_string(),
+        expensive: 50,
+        default: 550,
+        cheap: 590,
+    };
+
+    let err = bitaxe_clocker::bitaxe::get_running_mode(&client, &bitaxe)
+        .await
+        .unwrap_err();
+
+    assert!(
+        err.source().is_some(),
+        "transport error was flattened into a string; the underlying cause is lost"
+    );
+}
+
+#[tokio::test]
 async fn test_switch_frequency_success() {
     let mut mock_server = mockito::Server::new_async().await;
     let mock_patch = mock_server
@@ -149,12 +175,10 @@ async fn test_switch_frequency_failure() {
     let result = bitaxe_clocker::bitaxe::switch_frequency(&client, &bitaxe, 590).await;
     // With proper error handling, should now return an error on failure
     assert!(result.is_err());
-    match result {
-        Err(bitaxe_clocker::bitaxe::BitaxeError::NetworkMessage(msg)) => {
-            assert_eq!(msg, "Failed to update Bitaxe");
-        }
-        _ => panic!("Expected NetworkError variant"),
-    }
+    assert!(
+        matches!(result, Err(bitaxe_clocker::bitaxe::BitaxeError::UpdateRejected)),
+        "expected the device-rejection variant"
+    );
     mock_patch.assert();
     mock_restart.assert();
 }
@@ -192,10 +216,10 @@ mod parse_running_mode_tests {
         });
         let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
         assert!(result.is_err());
-        assert_eq!(
+        assert!(matches!(
             result.unwrap_err(),
             bitaxe_clocker::bitaxe::BitaxeError::InvalidFrequency
-        );
+        ));
     }
 
     #[test]
@@ -205,10 +229,10 @@ mod parse_running_mode_tests {
         });
         let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
         assert!(result.is_err());
-        assert_eq!(
+        assert!(matches!(
             result.unwrap_err(),
             bitaxe_clocker::bitaxe::BitaxeError::InvalidFrequency
-        );
+        ));
     }
 
     #[test]
@@ -246,10 +270,10 @@ mod parse_running_mode_tests {
         let json = json!({});
         let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
         assert!(result.is_err());
-        assert_eq!(
+        assert!(matches!(
             result.unwrap_err(),
             bitaxe_clocker::bitaxe::BitaxeError::InvalidFrequency
-        );
+        ));
     }
 
     #[test]
@@ -259,10 +283,10 @@ mod parse_running_mode_tests {
         });
         let result = bitaxe_clocker::bitaxe::parse_running_mode(&json);
         assert!(result.is_err());
-        assert_eq!(
+        assert!(matches!(
             result.unwrap_err(),
             bitaxe_clocker::bitaxe::BitaxeError::InvalidFrequency
-        );
+        ));
     }
 
     #[test]
