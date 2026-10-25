@@ -50,6 +50,10 @@ it behaves once running:
   loop. An absurdly large value is now reported rather than silently wrapping.
 - **The Docker container runs as uid 10001** rather than root, so a mounted `config.toml`
   must be world-readable.
+- **The Docker image no longer contains a default config.** It previously shipped
+  `config.example.toml` as `/app/config.toml`, so a missing bind-mount source left the
+  container running against the example's two hosts. A mount is now required; the
+  container exits with an explanation if `config.toml` is not provided.
 
 Log output also changed shape, from `INFO msg="Checking 192.168.8.1"` to structured fields:
 `INFO Checking device host=192.168.8.1`. Anything grepping the old format needs updating.
@@ -81,6 +85,11 @@ docker compose down    # stop
 
 This mounts your local `config.toml` into the container. The container will restart automatically unless you explicitly stop it.
 
+The image contains **no configuration of its own** — the mount is required, and `config.toml`
+must exist on the host before you start the container. If it is absent, Docker creates an
+empty directory at the mount point and starts the container anyway; the application then
+stops with a message saying so.
+
 The container runs as a non-root user (uid 10001), so a mounted `config.toml` must be
 world-readable — the usual `644` is fine, `600` is not.
 
@@ -91,7 +100,10 @@ docker build -t bitaxe-clocker .
 docker run -v $(pwd)/config.toml:/app/config.toml:ro bitaxe-clocker
 ```
 
-The image ships with `config.example.toml` as the default. Mount your own `config.toml` to override it.
+The image ships no config. `config.example.toml` stays in the repository as the template to
+copy, but it is no longer baked into the image: it used to be, which meant a failed mount
+left the container running against the example's hosts rather than failing. Use an explicit
+mount as above.
 
 The image includes a Docker `HEALTHCHECK` (every 30s, 3 retries). Because the application only
 makes outbound connections and exposes no inbound port, the healthcheck verifies process liveness

@@ -50,13 +50,22 @@ WORKDIR /app
 # Copy the built binary
 COPY --from=builder --chown=bitaxe:bitaxe /app/target/release/bitaxe-clocker ./bitaxe-clocker
 
-COPY --chown=bitaxe:bitaxe config.example.toml ./config.toml
+# No config is baked in, deliberately. The image used to ship
+# `config.example.toml` as `/app/config.toml`, so a bind mount that silently failed to
+# provide a file left the container running against the example's hosts (192.168.8.1 and
+# .8.2) instead of failing. For this application a wrong default is worse than no default:
+# it PATCHes frequency and restarts whatever answers at those addresses. With nothing
+# baked in, a missing mount now stops at startup with a message naming the fix.
+#
+# `config.example.toml` remains in the repository as the template to copy from.
 
 USER bitaxe
 
 # Expose no ports (application connects outbound only)
-# Mount your own config.toml: docker run -v $(pwd)/config.toml:/app/config.toml bitaxe-clocker
-# A mounted config must be world-readable, since it is read by uid 10001, not root.
+# Mount your own config.toml: docker run -v $(pwd)/config.toml:/app/config.toml:ro bitaxe-clocker
+# The mount source must already exist on the host. If it does not, Docker creates an empty
+# directory at that path and starts anyway; the application then reports that config.toml
+# is a directory. It must also be world-readable, since it is read by uid 10001, not root.
 
 ENV TZ=Europe/Berlin
 
