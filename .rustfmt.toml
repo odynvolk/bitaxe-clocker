@@ -1,35 +1,25 @@
-# Rust code formatting configuration
+# rustfmt configuration.
+#
+# Two keys here. Both are accepted by stable `cargo fmt` and both differ from
+# rustfmt's own defaults.
+#
+# The rule this file failed before: an unrecognised key IS reported - rustfmt prints
+# "invalid key=val pair". The quiet one is a key rustfmt recognises but does not implement
+# on stable: accepted, no warning, no effect, and `cargo fmt` still exits 0. So a key can sit
+# here for months doing nothing, and the config file then reads as though a rule is enforced
+# when nothing is checking it.
+#
+# Verify any change here actually takes effect, rather than assuming it did:
+#   cargo fmt -- --check
+# and, for a key with visible layout effects, confirm a file that would be
+# formatted differently with and without it.
 
-# Maximum line length
-max_width = 120
-
-# Number of spaces per tab
-hard_tabs = false
-
-# Tab width
-tab_spaces = 4
-
-# Use single line for short if/let statements
-single_line_if_else_max_width = 50
-
-# Reorder imports
-reorder_imports = true
-
-# Edition
+# Rust edition. Default for standalone `rustfmt` is 2015, which cannot parse this
+# code at all - bare `rustfmt --check src/bitaxe.rs` fails with
+# "error[E0670]: `async fn` is not permitted in Rust 2015". `cargo fmt` infers the
+# edition from Cargo.toml, so it was unaffected either way; this is for editors
+# and direct invocation.
 edition = "2021"
 
-# Force trailing semicolons
-merge_derives = true
-
-# Remove unnecessary parentheses
-remove_nested_parens = true
-
-# Match arm indentation
-match_arm_leading_pipes = "Never"
-
-# Use try expression
-use_try_shorthand = false
-
-# Width config
-struct_lit_width = 18
-struct_variant_width = 16
+# Default is 100.
+max_width = 120

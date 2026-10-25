@@ -10,7 +10,53 @@ Prerequisites:
 
 - Rust lang
 
-An easy way to setup Rust is to use [asdf](https://asdf-vm.com/). Then run `asdf install` to get the proper version specified in the project.
+The toolchain used for local development is declared in `rust-toolchain.toml` and selected
+automatically by [rustup](https://rustup.rs/) — just run `cargo build`. There is no need to
+install a specific version by hand. It names the `stable` channel rather than an exact
+version, so nothing has to be downloaded to start work; it does not apply to the Docker
+image, which pins its own.
+
+## Development
+
+There is no CI in this repository, so these checks are run by hand before committing:
+
+```bash
+cargo fmt -- --check                        # formatting
+cargo clippy --all-targets -- -D warnings   # lints, warnings are errors
+cargo test                                  # test suite
+cargo build --release --locked              # release build
+```
+
+Both config files in this repo are worth knowing about before you touch them, because each
+fails in the opposite way. A key clippy does not recognise aborts the entire build with an
+`unknown field` error, so nothing lints and the reason looks like a code problem. A key
+rustfmt recognises but does not implement on stable is accepted, silently does nothing, and
+`cargo fmt` still exits 0. Re-run the checks above after editing either file, and for a
+rustfmt key with visible layout effects, confirm a file really is formatted differently with
+and without it.
+
+## Upgrading
+
+Three changes to what the application accepts and does at startup, none of which change how
+it behaves once running:
+
+- **An unrecognised `provider_type` now stops startup.** It used to log
+  `Unknown provider type '<x>', using elpriset_just_nu` and carry on, so a daemon configured
+  for one market would silently price itself against another. A missing
+  `[price_provider.<name>]` section likewise used to panic via `.expect()`; it is now a
+  reported configuration error.
+- **`check_interval` must be a non-negative integer**, enforced while parsing. It used to
+  accept a negative value, then panic on the way to building a `Duration` from inside the
+  loop. An absurdly large value is now reported rather than silently wrapping.
+- **The Docker container runs as uid 10001** rather than root, so a mounted `config.toml`
+  must be world-readable.
+- **The Docker image no longer contains a default config.** It previously shipped
+  `config.example.toml` as `/app/config.toml`, so a missing bind-mount source left the
+  container running against the example's two hosts. A mount is now required; the
+  container exits with an explanation if `config.toml` is not provided.
+
+Log output also changed shape, from `INFO msg="Checking 192.168.8.1"` to structured fields:
+`INFO Checking device host=192.168.8.1`. Anything grepping the old format needs updating.
 
 ## Usage
 1) Create a `config.toml` from the `config.example.toml` and place it in the main directory.
@@ -39,6 +85,14 @@ docker compose down    # stop
 
 This mounts your local `config.toml` into the container. The container will restart automatically unless you explicitly stop it.
 
+The image contains **no configuration of its own** — the mount is required, and `config.toml`
+must exist on the host before you start the container. If it is absent, Docker creates an
+empty directory at the mount point and starts the container anyway; the application then
+stops with a message saying so.
+
+The container runs as a non-root user (uid 10001), so a mounted `config.toml` must be
+world-readable — the usual `644` is fine, `600` is not.
+
 Alternatively, build and run with plain Docker:
 
 ```bash
@@ -46,7 +100,10 @@ docker build -t bitaxe-clocker .
 docker run -v $(pwd)/config.toml:/app/config.toml:ro bitaxe-clocker
 ```
 
-The image ships with `config.example.toml` as the default. Mount your own `config.toml` to override it.
+The image ships no config. `config.example.toml` stays in the repository as the template to
+copy, but it is no longer baked into the image: it used to be, which meant a failed mount
+left the container running against the example's hosts rather than failing. Use an explicit
+mount as above.
 
 The image includes a Docker `HEALTHCHECK` (every 30s, 3 retries). Because the application only
 makes outbound connections and exposes no inbound port, the healthcheck verifies process liveness
@@ -61,7 +118,7 @@ The application is configured via `config.toml`. Below is a reference of all ava
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `check_interval` | `i32` | How often to check prices and update frequency, in minutes. |
+| `check_interval` | `u64` | How often to check prices and update frequency, in minutes. Must not be negative. |
 
 ### Prices (under `[prices]`)
 
@@ -148,11 +205,14 @@ pub struct NordpoolConfig {
 /// Price provider implementation for Nordpool.
 pub struct NordpoolProvider {
     config: NordpoolConfig,
+    /// Returned when the price API is unreachable, so a pricing outage degrades to a
+    /// configured frequency instead of stalling the loop.
+    fallback_price: f64,
 }
 
 impl NordpoolProvider {
-    pub fn new(config: NordpoolConfig) -> Self {
-        Self { config }
+    pub fn new(config: NordpoolConfig, fallback_price: f64) -> Self {
+        Self { config, fallback_price }
     }
 }
 
@@ -208,25 +268,36 @@ pub struct PriceProviderConfig {
 
 ```rust
 impl PriceProviderFactory {
-    pub fn create_provider(provider_type: &str, config: &common::PriceProviderConfig) -> Box<dyn PriceProvider> {
-        match provider_type {
+    pub fn create_provider(
+        config: &common::PriceProviderConfig,
+        fallback_price: f64,
+    ) -> Result<Box<dyn PriceProvider>, common::ConfigError> {
+        match config.provider_type.as_str() {
             "elpriset_just_nu" => {
                 // existing implementation
             }
             "nordpool" => {
-                let nordpool_config = config.nordpool.as_ref()
-                    .expect("nordpool provider requires nordpool config");
-                Box::new(NordpoolProvider::new(NordpoolConfig {
-                    region: nordpool_config.region.clone(),
-                }))
+                let nordpool_config = config.nordpool.as_ref().ok_or_else(|| {
+                    common::ConfigError::MissingProviderSection("nordpool".to_string())
+                })?;
+
+                Ok(Box::new(NordpoolProvider::new(
+                    nordpool_config.clone(),
+                    fallback_price,
+                )))
             }
-            _ => {
-                // default fallback
-            }
+            other => Err(common::ConfigError::UnknownProvider(format!(
+                "'{other}'; supported providers: {}",
+                SUPPORTED_PROVIDERS.join(", ")
+            ))),
         }
     }
 }
 ```
+
+A new provider also needs its name added to `SUPPORTED_PROVIDERS` in the same file, which is
+what the error message reports. `listed_provider_is_actually_buildable` fails if the two
+drift apart.
 
 5. **Update the configuration** in `config.toml`:
 

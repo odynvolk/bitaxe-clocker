@@ -5,5 +5,8 @@ services:
     environment:
       - TZ=Europe/Berlin
     volumes:
+      # ./config.toml must already exist on the host. If it does not, Docker creates an
+      # empty directory here and starts the container anyway; the application then exits
+      # and says so. The image itself ships no config to fall back to.
       - ./config.toml:/app/config.toml:ro
     restart: unless-stopped
