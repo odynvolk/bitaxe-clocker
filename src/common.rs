@@ -6,21 +6,26 @@ use std::time::Duration;
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error(
-        "no config.toml in the working directory.\n\
-         Local: copy config.example.toml to config.toml and edit it.\n\
-         Docker: mount one, e.g. -v ./config.toml:/app/config.toml:ro (docker compose already does)"
+        "no config.toml at {path}.\n\
+         Local: copy config.example.toml to config.toml, in the directory you run from.\n\
+         Docker: pass one, e.g. -v ./config.toml:{path}:ro - or use docker compose, \
+         which already declares this mount."
     )]
-    NotFound,
+    NotFound { path: String },
 
     #[error(
-        "config.toml is a directory, not a file.\n\
+        "config.toml at {path} is a directory, not a file.\n\
          A Docker bind mount does this when the host path does not exist - it creates the \
-         directory rather than failing. Create ./config.toml on the host, then re-run."
+         directory rather than failing. Create the file on the host, then re-run."
     )]
-    IsADirectory,
+    IsADirectory { path: String },
 
-    #[error("failed to read config.toml: {0}")]
-    Read(#[from] std::io::Error),
+    #[error("failed to read {path}: {source}")]
+    Read {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
 
     #[error("invalid config.toml: {0}")]
     Parse(#[from] toml::de::Error),
@@ -43,11 +48,27 @@ pub enum ConfigError {
 /// platform-dependent - opening a directory succeeds on both platforms tested and the
 /// `EISDIR` surfaces from `read`. Attaching this to the open call alone was verified
 /// end-to-end to leave `Is a directory` unmapped.
-fn classify_io_error(err: std::io::Error) -> ConfigError {
+fn classify_io_error(err: std::io::Error, path: &str) -> ConfigError {
+    let path = attempted_path(path);
+
     match err.kind() {
-        std::io::ErrorKind::NotFound => ConfigError::NotFound,
-        std::io::ErrorKind::IsADirectory => ConfigError::IsADirectory,
-        _ => ConfigError::Read(err),
+        std::io::ErrorKind::NotFound => ConfigError::NotFound { path },
+        std::io::ErrorKind::IsADirectory => ConfigError::IsADirectory { path },
+        _ => ConfigError::Read { path, source: err },
+    }
+}
+
+/// Absolute form of `path`, so an error can name the file actually opened. Worth the extra
+/// step because the config is opened by a relative path: "the working directory" means
+/// nothing in a container, whereas `/app/config.toml` says whether a mount landed at all.
+fn attempted_path(path: &str) -> String {
+    if std::path::Path::new(path).is_absolute() {
+        return path.to_string();
+    }
+
+    match std::env::current_dir() {
+        Ok(cwd) => cwd.join(path).display().to_string(),
+        Err(_) => path.to_string(),
     }
 }
 
@@ -120,9 +141,10 @@ pub fn load_config() -> Result<Config, ConfigError> {
 /// tested by passing a path, rather than by calling `set_current_dir` - the working
 /// directory is process-wide and these tests run on parallel threads.
 pub fn load_config_from(path: &str) -> Result<Config, ConfigError> {
-    let mut file = File::open(path).map_err(classify_io_error)?;
+    let mut file = File::open(path).map_err(|err| classify_io_error(err, path))?;
     let mut contents = String::new();
-    file.read_to_string(&mut contents).map_err(classify_io_error)?;
+    file.read_to_string(&mut contents)
+        .map_err(|err| classify_io_error(err, path))?;
 
     parse_config(&contents)
 }
@@ -173,8 +195,8 @@ mod tests {
     #[test]
     fn missing_config_file_names_the_fix_rather_than_the_errno() {
         assert!(matches!(
-            classify_io_error(io_err(std::io::ErrorKind::NotFound)),
-            ConfigError::NotFound
+            classify_io_error(io_err(std::io::ErrorKind::NotFound), CONFIG_PATH),
+            ConfigError::NotFound { .. }
         ));
     }
 
@@ -183,26 +205,43 @@ mod tests {
     #[test]
     fn config_that_is_a_directory_explains_the_bind_mount_trap() {
         assert!(matches!(
-            classify_io_error(io_err(std::io::ErrorKind::IsADirectory)),
-            ConfigError::IsADirectory
+            classify_io_error(io_err(std::io::ErrorKind::IsADirectory), CONFIG_PATH),
+            ConfigError::IsADirectory { .. }
         ));
     }
 
     #[test]
     fn other_io_failures_keep_the_underlying_error_as_source() {
-        match classify_io_error(io_err(std::io::ErrorKind::PermissionDenied)) {
-            ConfigError::Read(err) => {
-                assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied)
+        match classify_io_error(io_err(std::io::ErrorKind::PermissionDenied), CONFIG_PATH) {
+            ConfigError::Read { source, .. } => {
+                assert_eq!(source.kind(), std::io::ErrorKind::PermissionDenied)
             }
             other => panic!("expected the io error to be retained, got {other:?}"),
         }
+    }
+
+    /// The point of carrying the path: a relative name in an error is useless inside a
+    /// container, where nobody knows the working directory.
+    #[test]
+    fn the_missing_config_message_names_the_absolute_path_tried() {
+        let attempted = attempted_path("absent-config.toml");
+        let message = classify_io_error(io_err(std::io::ErrorKind::NotFound), "absent-config.toml").to_string();
+
+        assert!(
+            std::path::Path::new(&attempted).is_absolute(),
+            "expected an absolute path, got {attempted}"
+        );
+        assert!(
+            message.contains(&attempted),
+            "message should name the file actually opened: {message}"
+        );
     }
 
     #[test]
     fn a_missing_path_reports_the_missing_config_message() {
         let outcome = load_config_from("/nonexistent/bitaxe-clocker-absent-config.toml");
         assert!(
-            matches!(outcome, Err(ConfigError::NotFound)),
+            matches!(outcome, Err(ConfigError::NotFound { .. })),
             "expected the missing-config message, got {outcome:?}"
         );
     }
@@ -222,7 +261,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
 
         assert!(
-            matches!(outcome, Err(ConfigError::IsADirectory)),
+            matches!(outcome, Err(ConfigError::IsADirectory { .. })),
             "expected the bind-mount message, got {outcome:?}"
         );
     }
