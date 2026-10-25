@@ -12,7 +12,9 @@ provider_type = "elpriset_just_nu"
 [price_provider.elpriset_just_nu]
 price_zone = "SE3"
 
-# Multiple Bitaxes are supported
+# Multiple Bitaxes are supported.
+# Every device needs all three of `expensive`, `default` and `cheap` — omitting one
+# fails at startup with `missing field`, rather than falling back to anything.
 [[bitaxes]]
 host = "192.168.8.1"
 expensive = 50 # GH/s to use in expensive mode
@@ -23,3 +25,4 @@ default = 500 # GH/s to use in default mode
 host = "192.168.8.2"
 expensive = 50
 default = 550
+cheap = 580

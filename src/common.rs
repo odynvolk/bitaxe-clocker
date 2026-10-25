@@ -113,6 +113,16 @@ mod tests {
         )
     }
 
+    /// The image ships `config.example.toml` as `/app/config.toml`, so this file is a
+    /// runtime default, not documentation. Without a mounted config the container parses
+    /// this one, and until now nothing checked that it parses.
+    #[test]
+    fn example_config_shipped_in_the_docker_image_is_valid() {
+        let example = include_str!("../config.example.toml");
+
+        parse_config(example).expect("config.example.toml must be loadable");
+    }
+
     #[test]
     fn parses_a_valid_configuration() {
         let config = parse_config(&config_with_check_interval("60")).unwrap();
