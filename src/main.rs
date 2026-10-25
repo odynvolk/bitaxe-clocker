@@ -1,6 +1,7 @@
 use bitaxe_clocker::price_providers::PriceProviderFactory;
 use reqwest::Client;
 use std::{
+    process::ExitCode,
     sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
     time as std_time,
@@ -8,7 +9,21 @@ use std::{
 use tokio::{signal, time as tokio_time};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        // A `main` returning `Result` is reported through `Debug`, never `Display`. For a
+        // typed error that means dumping every nested variant - and for a config error,
+        // the entire config file again as `raw: Some(...)`. Reporting here is what makes
+        // `ConfigError`'s `#[error(...)]` messages actually reach the operator.
+        Err(err) => {
+            eprintln!("Error: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Installed first, on purpose: `tracing` events emitted before a subscriber is
     // installed are discarded rather than buffered, and `load_config` emits one.
     bitaxe_clocker::logger::init();
